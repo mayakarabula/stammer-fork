@@ -1,10 +1,10 @@
 use block::Block;
+use elements::Element;
 use fleck::Font;
 use pixels::Pixels;
 
-use crate::elements::Element;
-
 mod block;
+pub mod wrapped_text; // TODO: Move the whole element.rs stuff into a directory.
 pub mod elements;
 
 /// The number of bytes per [`Pixel`].
