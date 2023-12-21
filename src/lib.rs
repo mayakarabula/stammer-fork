@@ -5,7 +5,6 @@ use pixels::Pixels;
 
 mod block;
 pub mod elements;
-pub mod wrapped_text; // TODO: Move the whole element.rs stuff into a directory.
 
 /// The number of bytes per [`Pixel`].
 pub const PIXEL_SIZE: usize = 4;

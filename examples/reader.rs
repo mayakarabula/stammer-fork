@@ -3,8 +3,8 @@
 use fleck::Font;
 use pixels::wgpu::BlendState;
 use pixels::{PixelsBuilder, SurfaceTexture};
+use stammer::elements::WrappedText;
 use stammer::elements::{Element, ElementKind};
-use stammer::wrapped_text::WrappedText;
 use stammer::Raam;
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::{Event, VirtualKeyCode};

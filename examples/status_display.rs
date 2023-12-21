@@ -5,7 +5,8 @@ use std::collections::VecDeque;
 use fleck::Font;
 use pixels::wgpu::BlendState;
 use pixels::{PixelsBuilder, SurfaceTexture};
-use stammer::elements::{Element, ElementKind, Graph};
+use stammer::elements::Graph;
+use stammer::elements::{Element, ElementKind};
 use stammer::Raam;
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::Event;
@@ -39,7 +40,7 @@ fn load_font(path: &str) -> std::io::Result<Font> {
 
 fn setup_elements() -> Element<Data> {
     let graph_width = 150;
-    let sine = stammer::elements::Graph::from({
+    let sine = Graph::from({
         // A lil sine wave.
         let mut deque = VecDeque::new();
         for x in 0..graph_width {
