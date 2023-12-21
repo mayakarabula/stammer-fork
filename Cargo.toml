@@ -1,0 +1,10 @@
+[package]
+name = "stammer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fleck = "0.1.1"
+pixels = "0.13.0"
+winit = "0.28.0"
+winit_input_helper = "0.14.0"
