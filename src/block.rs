@@ -1,6 +1,15 @@
+use fleck::Font;
 use pixels::Pixels;
 
 use crate::{Pixel, Rows, RowsMut, PIXEL_SIZE};
+
+// TODO: The methods for this trait rely on a Font argument. I think I want Font to be specified by
+// whatever Self it is implemented for.
+pub(crate) trait DrawBlock {
+    fn block_width(&self, font: &Font) -> usize;
+    fn block_height(&self, _font: &Font) -> usize;
+    fn block(&self, font: &Font) -> Block;
+}
 
 pub(crate) struct Block {
     /// Width in pixels.

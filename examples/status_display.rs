@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 use fleck::Font;
 use pixels::wgpu::BlendState;
 use pixels::{PixelsBuilder, SurfaceTexture};
-use stammer::elements::{Element, Graph};
+use stammer::elements::{Element, ElementKind, Graph};
 use stammer::Raam;
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::Event;
@@ -37,12 +37,13 @@ fn load_font(path: &str) -> std::io::Result<Font> {
     Ok(font)
 }
 
-fn setup_elements() -> Element {
+fn setup_elements() -> Element<Data> {
+    let graph_width = 150;
     let sine = stammer::elements::Graph::from({
         // A lil sine wave.
         let mut deque = VecDeque::new();
-        for x in 0..120 {
-            let y = f32::sin(x as f32 / 30.0 * std::f32::consts::FRAC_PI_2);
+        for x in 0..graph_width {
+            let y = f32::sin(x as f32 / (graph_width / 4) as f32 * std::f32::consts::FRAC_PI_2);
             deque.push_front(y)
         }
         deque
@@ -50,26 +51,60 @@ fn setup_elements() -> Element {
     let triangle = Graph::from({
         // A triangle wave.
         let mut deque = VecDeque::new();
-        for x in 0..120 {
-            let y = i32::abs(x % 30 - 15);
+        for x in 0..graph_width {
+            let a = graph_width / 5;
+            let y = i32::abs(x % 30 - a / 2);
             deque.push_front(y as f32)
         }
         deque
     });
-    let elements = {
-        use Element::*;
-        Row(vec![
-            Stack(vec![
-                Text("deflection coil phase".to_string()),
-                Space,
-                Text("tri-axial wave converter".to_string()),
-            ]),
-            Space,
-            Stack(vec![Graph(sine), Space, Graph(triangle)]),
-        ])
-    };
 
-    elements
+    fn step_graph(thing: &mut ElementKind<Data>, data: &Data) {
+        // TODO: This whole practice is a mess and is horrible and oh no.
+        let ElementKind::Graph(graph) = thing else {
+            unreachable!()
+        };
+        graph.inner_mut().rotate_left(data.rotate_step);
+    }
+
+    fn display_step(thing: &mut ElementKind<Data>, data: &Data) {
+        // TODO: This whole practice is a mess and is horrible and oh no.
+        let ElementKind::Text(text) = thing else {
+            unreachable!()
+        };
+        text.clear();
+        text.push_str(format!("{} femtoseconds", data.rotate_step).as_str())
+    }
+
+    {
+        use ElementKind::*;
+        Element::still(Stack(vec![
+            Element::still(Row(vec![
+                Element::still(Text("measurement interval:".to_string())),
+                Element::still(Space),
+                Element::still(Space),
+                Element::dynamic(display_step, Text("---".to_string())),
+            ])),
+            Element::still(Space),
+            Element::still(Row(vec![
+                Element::still(Stack(vec![
+                    Element::still(Text("deflection coil phase".to_string())),
+                    Element::still(Space),
+                    Element::still(Text("tri-axial wave converter".to_string())),
+                ])),
+                Element::still(Space),
+                Element::still(Stack(vec![
+                    Element::dynamic(step_graph, Graph(sine)),
+                    Element::still(Space),
+                    Element::dynamic(step_graph, Graph(triangle)),
+                ])),
+            ])),
+        ]))
+    }
+}
+
+struct Data {
+    rotate_step: usize,
 }
 
 fn main() -> Result<(), pixels::Error> {
@@ -95,11 +130,13 @@ fn main() -> Result<(), pixels::Error> {
 
     let elements = setup_elements();
 
+    let data = Data { rotate_step: 1 };
     let mut state = Raam::new(
         elements,
         Box::new(font),
         [0x00, 0x00, 0x00, 0xff],
         [0xff, 0xff, 0xff, 0xff],
+        data,
     );
 
     let (width, height) = (state.width, state.height);
@@ -149,6 +186,15 @@ fn main() -> Result<(), pixels::Error> {
         }
 
         if input.update(&event) {
+            if input.key_pressed(winit::event::VirtualKeyCode::Up) {
+                state.data_mut().rotate_step += 1;
+            }
+
+            if input.key_pressed(winit::event::VirtualKeyCode::Down) {
+                let step = &mut state.data_mut().rotate_step;
+                *step = step.saturating_sub(1);
+            }
+
             // Close events.
             if input.close_requested() {
                 eprintln!("INFO:  Close requested. Bye :)");

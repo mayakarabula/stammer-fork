@@ -1,11 +1,11 @@
-use block::Block;
+use block::{Block, DrawBlock};
 use elements::Element;
 use fleck::Font;
 use pixels::Pixels;
 
 mod block;
-pub mod wrapped_text; // TODO: Move the whole element.rs stuff into a directory.
 pub mod elements;
+pub mod wrapped_text; // TODO: Move the whole element.rs stuff into a directory.
 
 /// The number of bytes per [`Pixel`].
 pub const PIXEL_SIZE: usize = 4;
@@ -16,7 +16,7 @@ type Rows<'b> = std::slice::ChunksExact<'b, Pixel>;
 /// An iterator over mutable rows of [`Pixel`]s.
 type RowsMut<'b> = std::slice::ChunksExactMut<'b, Pixel>;
 
-pub struct Raam {
+pub struct Raam<D> {
     pub width: u32,
     pub height: u32,
     pub foreground: Pixel,
@@ -24,23 +24,36 @@ pub struct Raam {
 
     font: Box<Font>,
 
-    elements: Element,
+    data: D,
+    elements: Element<D>,
 }
 
-impl Raam {
-    pub fn new(elements: Element, font: Box<Font>, foreground: Pixel, background: Pixel) -> Self {
+impl<D> Raam<D> {
+    pub fn new(
+        elements: Element<D>,
+        font: Box<Font>,
+        foreground: Pixel,
+        background: Pixel,
+        data: D,
+    ) -> Self {
         Self {
             width: elements.block_width(&font) as u32,
             height: elements.block_height(&font) as u32,
             foreground,
             background,
             font,
+            data,
             elements,
         }
     }
 
+    pub fn data_mut(&mut self) -> &mut D {
+        &mut self.data
+    }
+
+    /// Update all elements with the internal `data`.
     pub fn update(&mut self) {
-        self.elements.update()
+        self.elements.update(&self.data)
     }
 
     pub fn draw(&self, pixels: &mut Pixels) {

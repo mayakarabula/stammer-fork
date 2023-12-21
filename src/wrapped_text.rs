@@ -1,6 +1,7 @@
 use fleck::Font;
 
 /// A wrapper for a [`String`] where its contents are guaranteed to be wrapped at construction.
+#[derive(Debug, Default, Clone)]
 pub struct WrappedText(String);
 
 impl WrappedText {

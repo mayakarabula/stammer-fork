@@ -2,45 +2,100 @@ use std::collections::VecDeque;
 
 use fleck::Font;
 
+use crate::block::DrawBlock;
 use crate::wrapped_text::WrappedText;
 use crate::{Block, PIXEL_SIZE};
 
-pub enum Element {
+type UpdateFn<D> = fn(&mut ElementKind<D>, &D);
+
+pub struct Element<D> {
+    /// Function that will update `thing` according to some `data` with type `D`.
+    inner_update: Option<UpdateFn<D>>, // TODO: Bikeshedded name.
+    thing: ElementKind<D>,
+}
+
+impl<D> Element<D> {
+    pub fn new(update: Option<UpdateFn<D>>, thing: ElementKind<D>) -> Self {
+        Self {
+            inner_update: update,
+            thing,
+        }
+    }
+
+    pub fn still(thing: ElementKind<D>) -> Self {
+        Self::new(None, thing)
+    }
+
+    pub fn dynamic(update: UpdateFn<D>, thing: ElementKind<D>) -> Self {
+        Self::new(Some(update), thing)
+    }
+
+    /// Update the inner [`ElementKind`] and subsequently let these children call their own update
+    /// functions as well, in the case of a collection [`ElementKind`], such as
+    /// [`ElementKind::Row`] or [`ElementKind::Stack`].
+    pub(crate) fn update(&mut self, data: &D) {
+        if let Some(update) = self.inner_update {
+            update(&mut self.thing, data)
+        }
+
+        // TODO: (easy) Break out the 'is it a collection type' logic to a
+        // `ElementKind::is_collection(&self) -> bool`.
+        match &mut self.thing {
+            // Update the chirren.
+            ElementKind::Row(elements) | ElementKind::Stack(elements) => {
+                elements.iter_mut().for_each(|element| element.update(data))
+            }
+            // These are not collection ElementKinds, and therefore do not require their children
+            // to be updated.
+            ElementKind::Space
+            | ElementKind::Text(_)
+            | ElementKind::Paragraph(_, _, _)
+            | ElementKind::Graph(_) => {}
+        };
+    }
+}
+
+impl<D> DrawBlock for Element<D> {
+    fn block_width(&self, font: &Font) -> usize {
+        self.thing.block_width(font)
+    }
+
+    fn block_height(&self, _font: &Font) -> usize {
+        self.thing.block_height(_font)
+    }
+
+    fn block(&self, font: &Font) -> Block {
+        self.thing.block(font)
+    }
+}
+
+pub enum ElementKind<D> {
     Space,
 
     Text(String),
     Paragraph(WrappedText, usize, usize),
     Graph(Graph),
 
-    Row(Vec<Element>),
-    Stack(Vec<Element>),
+    Row(Vec<Element<D>>),
+    Stack(Vec<Element<D>>),
 }
 
-impl Element {
-    pub(crate) fn update(&mut self) {
-        match self {
-            Element::Graph(graph) => graph.0.rotate_left(1),
-            Element::Row(elements) | Element::Stack(elements) => {
-                for element in elements {
-                    element.update()
-                }
-            }
-            Element::Space | Element::Text(_) | Element::Paragraph(_, _, _) => {}
-        }
-    }
-
+impl<D> DrawBlock for ElementKind<D> {
     // TODO: See, this with the font is where my design starts breaking down. I think the a
     // reference to the font should be part of the element.
-    pub(crate) fn block_width(&self, font: &Font) -> usize {
+    fn block_width(&self, font: &Font) -> usize {
         match self {
-            Element::Space => font.max_width(),
-            Element::Text(t) => font.determine_width(t),
-            Element::Paragraph(_, width, _) => *width,
-            Element::Graph(g) => g.len(),
-            Element::Row(row) => row.iter().map(|element| element.block_width(font)).sum(),
-            Element::Stack(stack) => stack
+            ElementKind::Space => font.max_width(),
+            ElementKind::Text(t) => font.determine_width(t),
+            ElementKind::Paragraph(_, width, _) => *width,
+            ElementKind::Graph(g) => g.len(),
+            ElementKind::Row(row) => row
                 .iter()
-                .map(|element| element.block_width(font))
+                .map(|element| element.thing.block_width(font))
+                .sum(),
+            ElementKind::Stack(stack) => stack
+                .iter()
+                .map(|element| element.thing.block_width(font))
                 .max()
                 .unwrap_or_default(),
         }
@@ -48,31 +103,31 @@ impl Element {
 
     // TODO: Consider not relying on font here. May actually be more correct, since we always have
     // the same Font::GLYPH_HEIGHT?
-    pub(crate) fn block_height(&self, _font: &Font) -> usize {
+    fn block_height(&self, _font: &Font) -> usize {
         match self {
-            Element::Space | Element::Text(_) | Element::Graph(_) => Font::GLYPH_HEIGHT,
-            Element::Paragraph(_, _, height) => *height,
-            Element::Row(row) => row
+            ElementKind::Space | ElementKind::Text(_) | ElementKind::Graph(_) => Font::GLYPH_HEIGHT,
+            ElementKind::Paragraph(_, _, height) => *height,
+            ElementKind::Row(row) => row
                 .iter()
-                .map(|element| element.block_height(_font))
+                .map(|element| element.thing.block_height(_font))
                 .max()
                 .unwrap_or_default(),
-            Element::Stack(stack) => stack
+            ElementKind::Stack(stack) => stack
                 .iter()
-                .map(|element| element.block_height(_font))
+                .map(|element| element.thing.block_height(_font))
                 .sum(),
         }
     }
 
-    pub(crate) fn block(&self, font: &Font) -> Block {
+    fn block(&self, font: &Font) -> Block {
         let background = [0xff; PIXEL_SIZE];
         let foreground = [0x77, 0x33, 0x22, 0xff];
 
         let mut block = Block::new(self.block_width(font), self.block_height(font), background);
 
         match self {
-            Element::Space => {}
-            Element::Text(text) => {
+            ElementKind::Space => {}
+            ElementKind::Text(text) => {
                 let glyphs = text.chars().flat_map(|ch| font.glyph(ch));
                 let width: usize = glyphs.clone().map(|glyph| glyph.width as usize).sum();
                 let mut x0 = 0;
@@ -89,12 +144,12 @@ impl Element {
                     x0 += glyph_width;
                 }
             }
-            Element::Paragraph(text, _, height) => {
+            ElementKind::Paragraph(text, _, height) => {
                 let mut y = 0;
                 for line in text
                     .as_ref()
                     .lines()
-                    .map(|line| Element::Text(line.to_string()))
+                    .map(|line| ElementKind::<D>::Text(line.to_string()))
                 {
                     let line_block = line.block(font);
                     let line_block_height = line_block.height;
@@ -105,7 +160,7 @@ impl Element {
                     }
                 }
             }
-            Element::Graph(graph) => {
+            ElementKind::Graph(graph) => {
                 let min = graph.min();
                 let max = graph.max();
                 let height = block.height - 1;
@@ -117,8 +172,8 @@ impl Element {
                     rows[y][x] = [0x66, 0x33, 0x99, 0xff]
                 }
             }
-            Element::Row(row) => {
-                let row_blocks = row.iter().map(|element| element.block(font));
+            ElementKind::Row(row) => {
+                let row_blocks = row.iter().map(|element| element.thing.block(font));
                 let mut x = 0;
                 for row_block in row_blocks {
                     let width = row_block.width;
@@ -126,8 +181,8 @@ impl Element {
                     x += width;
                 }
             }
-            Element::Stack(stack) => {
-                let stack_blocks = stack.iter().map(|element| element.block(font));
+            ElementKind::Stack(stack) => {
+                let stack_blocks = stack.iter().map(|element| element.thing.block(font));
                 let mut y = 0;
                 for stack_block in stack_blocks {
                     let height = stack_block.height;

@@ -3,14 +3,14 @@
 use fleck::Font;
 use pixels::wgpu::BlendState;
 use pixels::{PixelsBuilder, SurfaceTexture};
-use stammer::elements::Element;
-use stammer::Raam;
+use stammer::elements::{Element, ElementKind};
 use stammer::wrapped_text::WrappedText;
+use stammer::Raam;
 use winit::dpi::{LogicalSize, PhysicalSize};
-use winit::event::Event;
+use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::EventLoop;
 use winit::window::{Window, WindowBuilder};
-use winit_input_helper::WinitInputHelper;
+use winit_input_helper::{TextChar, WinitInputHelper};
 
 const WINDOW_NAME: &str = env!("CARGO_BIN_NAME");
 
@@ -38,31 +38,68 @@ fn load_font(path: &str) -> std::io::Result<Font> {
     Ok(font)
 }
 
-fn setup_elements(font: &Font) -> Element {
-    let elements = {
-        use Element::*;
-        Stack(vec![
-            // Top bar.
-            Row(vec![Text("gemini://example.com/".to_string())]),
-            // Main content.
-            Stack(vec![
-                Paragraph(WrappedText::new(LOREM, 400, font), 400, 200),
-                Row(vec![
-                    Text("=>".to_string()),
-                    Space,
-                    Paragraph(
-                        WrappedText::new("gemini://geminiprotocol.net/", 450, font),
-                        450,
-                        16,
-                    ),
-                ]),
-            ]),
-            // Bottom bar.
-            Row(vec![Text("normal".to_string())]),
-        ])
-    };
+fn setup_elements() -> Element<Data> {
+    fn display_address(thing: &mut ElementKind<Data>, data: &Data) {
+        // TODO: This whole practice is a mess and is horrible and oh no.
+        let ElementKind::Text(text) = thing else {
+            unreachable!()
+        };
+        text.clear();
+        text.push_str(data.address.as_str())
+    }
 
-    elements
+    fn display_text(thing: &mut ElementKind<Data>, data: &Data) {
+        // TODO: This whole practice is a mess and is horrible and oh no.
+        let ElementKind::Paragraph(text, width, _) = thing else {
+            unreachable!()
+        };
+        *text = WrappedText::new(&data.text, *width, &data.font)
+    }
+
+    fn display_mode(thing: &mut ElementKind<Data>, data: &Data) {
+        // TODO: This whole practice is a mess and is horrible and oh no.
+        let ElementKind::Text(text) = thing else {
+            unreachable!()
+        };
+        text.clear();
+        text.push_str(data.mode.to_string().as_str())
+    }
+
+    {
+        use ElementKind::*;
+        Element::still(Stack(vec![
+            Element::dynamic(display_address, Text("---".to_string())),
+            Element::dynamic(display_text, Paragraph(WrappedText::default(), 600, 400)),
+            Element::dynamic(display_mode, Text("---".to_string())),
+        ]))
+    }
+}
+
+struct Data {
+    text: String,
+    address: String,
+    mode: Mode,
+    // TODO: Implement scrolling on Paragraph (through some kind of wrapper?). May in fact become a
+    // neat showcase of the notion of custom (wrapper) elements?
+    // scroll: usize,
+    font: Box<Font>,
+}
+
+#[derive(PartialEq, Eq)]
+enum Mode {
+    Normal,
+    Insert,
+    Link,
+}
+
+impl ToString for Mode {
+    fn to_string(&self) -> String {
+        match self {
+            Mode::Normal => "normal".to_string(),
+            Mode::Insert => "insert".to_string(),
+            Mode::Link => "link".to_string(),
+        }
+    }
 }
 
 fn main() -> Result<(), pixels::Error> {
@@ -77,6 +114,7 @@ fn main() -> Result<(), pixels::Error> {
             std::process::exit(1);
         }
     };
+    let font = Box::new(font);
 
     let event_loop = EventLoop::new();
 
@@ -86,13 +124,19 @@ fn main() -> Result<(), pixels::Error> {
         .map(|v| v.round() as u32)
         .unwrap_or(1);
 
-    let elements = setup_elements(&font);
-
+    let elements = setup_elements();
+    let data = Data {
+        text: LOREM.to_string(),
+        address: "gemini://example.com/".to_string(),
+        mode: Mode::Normal,
+        font: font.clone(), // TODO: Completely unnecessary with some better design. But it works.
+    };
     let mut state = Raam::new(
         elements,
-        Box::new(font),
+        font,
         [0x00, 0x00, 0x00, 0xff],
         [0xff, 0xff, 0xff, 0xff],
+        data,
     );
 
     let (width, height) = (state.width, state.height);
@@ -127,6 +171,7 @@ fn main() -> Result<(), pixels::Error> {
                     .array_chunks_mut()
                     .for_each(|px| *px = state.background);
 
+                eprintln!("INFO: Redrawing...");
                 // Update the state, then draw.
                 state.update();
                 state.draw(&mut pixels);
@@ -142,6 +187,50 @@ fn main() -> Result<(), pixels::Error> {
         }
 
         if input.update(&event) {
+            // Set mode.
+            {
+                let data = state.data_mut();
+                let mode = &mut data.mode;
+
+                match mode {
+                    Mode::Normal => {
+                        if input.key_pressed(VirtualKeyCode::I) {
+                            *mode = Mode::Insert;
+                            window.request_redraw();
+                        }
+                        if input.key_pressed(VirtualKeyCode::F) {
+                            eprintln!(
+                                "TODO: The implementation of `Mode::Link` has been \
+                                left as an exercise to cute ppl. <3"
+                            );
+                            *mode = Mode::Link;
+                            window.request_redraw();
+                        }
+                    }
+                    Mode::Insert => {
+                        for ch in input.text() {
+                            match ch {
+                                TextChar::Char('\n') => {
+                                    data.address.clear();
+                                    eprintln!("Please pretend some other site's text is loading.")
+                                }
+                                TextChar::Char(ch) => data.address.push(ch),
+                                TextChar::Back => {
+                                    let _ = data.address.pop();
+                                }
+                            }
+                            window.request_redraw();
+                        }
+                    }
+                    Mode::Link => { /* TODO */ }
+                }
+
+                if input.key_pressed(VirtualKeyCode::Escape) {
+                    *mode = Mode::Normal;
+                    window.request_redraw();
+                }
+            }
+
             // Close events.
             if input.close_requested() {
                 eprintln!("INFO:  Close requested. Bye :)");
@@ -164,9 +253,9 @@ fn main() -> Result<(), pixels::Error> {
                 pixels.resize_buffer(ls.width, ls.height).unwrap();
                 window.set_inner_size(ps);
                 state.resize(ls.width, ls.height);
-            }
 
-            window.request_redraw();
+                window.request_redraw();
+            }
         }
     });
 }
