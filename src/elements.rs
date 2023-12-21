@@ -169,6 +169,10 @@ impl Graph {
         self.0.iter()
     }
 
+    pub fn inner_mut(&mut self) -> &mut VecDeque<f32> {
+        &mut self.0
+    }
+
     pub fn min(&self) -> f32 {
         if self.is_empty() {
             return Default::default();
