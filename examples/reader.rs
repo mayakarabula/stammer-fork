@@ -3,7 +3,7 @@
 use fleck::Font;
 use pixels::wgpu::BlendState;
 use pixels::{PixelsBuilder, SurfaceTexture};
-use stammer::elements::WrappedText;
+use stammer::elements::{Alignment, WrappedText};
 use stammer::elements::{Element, ElementKind};
 use stammer::Raam;
 use winit::dpi::{LogicalSize, PhysicalSize};
@@ -69,7 +69,8 @@ fn setup_elements() -> Element<Data> {
         use ElementKind::*;
         Element::still(Stack(vec![
             Element::dynamic(display_address, Text("---".to_string())),
-            Element::dynamic(display_text, Paragraph(WrappedText::default(), 600, 400)),
+            Element::dynamic(display_text, Paragraph(WrappedText::default(), 600, 400))
+                .with_alignment(Alignment::Center),
             Element::dynamic(display_mode, Text("---".to_string())),
         ]))
     }

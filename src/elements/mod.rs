@@ -249,11 +249,10 @@ impl<D> DrawBlock for Element<D> {
                 foreground,
                 background,
             ),
-            ElementKind::Paragraph(text, _, height) => {
+            ElementKind::Paragraph(text, width, height) => {
                 let mut y = 0;
                 for line in text.as_ref().lines() {
-                    let width = font.determine_width(&line); // FIXME: Remove this in order to get alignment for Paragraph working?
-                    let mut line_block = Block::new(width, font.height(), background);
+                    let mut line_block = Block::new(*width, font.height(), background);
                     draw_text(
                         &mut line_block,
                         line,
