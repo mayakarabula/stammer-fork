@@ -14,6 +14,13 @@ pub struct Element<D> {
     /// If `None`, the width is determined based on the [`Element`] content. If set with
     /// `Some(width)`, this width is taken to be this `Element`s width.
     width: Option<usize>,
+    // TODO: Make alignment apply to other ElementKinds besides Text. Once that is done, update doc
+    // comments for the with_alignment function and remove todo!() .
+    /// The alignment of the contents within the [`Element`] bounds.
+    ///
+    /// For now, it only applies to [`ElementKind::Text`]. All other cases are drawn as
+    /// [`Alignment::Left]`.
+    alignment: Alignment,
     /// Function that will update `thing` according to some `data` with type `D`.
     inner_update: Option<UpdateFn<D>>, // TODO: Bikeshedded name.
     thing: ElementKind<D>,
@@ -23,6 +30,7 @@ impl<D> Element<D> {
     pub fn new(update: Option<UpdateFn<D>>, thing: ElementKind<D>) -> Self {
         Self {
             width: None,
+            alignment: Alignment::default(),
             inner_update: update,
             thing,
         }
@@ -52,6 +60,11 @@ impl<D> Element<D> {
     /// called.
     pub fn with_baked_width(mut self, font: &Font) -> Self {
         self.width = Some(self.block_width(font));
+        self
+    }
+
+    pub fn with_alignment(mut self, alignment: Alignment) -> Self {
+        self.alignment = alignment;
         self
     }
 }
@@ -137,41 +150,105 @@ impl<D> DrawBlock for Element<D> {
         let width = self.block_width(font);
         let mut block = Block::new(width, self.block_height(font), background);
 
+        #[inline(always)]
         fn draw_text(
             block: &mut Block,
             text: &str,
-            width: usize,
+            alignment: Alignment,
             font: &Font,
             foreground: [u8; 4],
             background: [u8; 4],
         ) {
+            // TODO: This implementation is not ideal. Since a Block is created to fit the entire
+            // line of text to then be cut off in a manner that depends on the alignment, we do
+            // more allocations than is necessary, and we may render more characters into that
+            // Block than is necessary (since they are eventually thrown away due to alignment).
+            // A better way of implementing this would be to do the proper computer maths with
+            // indices, so that it can all be done through iterators (which evaluate lazily).
+            // As a note for such an implementation in the future, see the state at or around
+            // commit e945006.
+
+            let scrap_width = font.determine_width(text);
+            // TODO: Perhaps this case can be handled a little more gracefull, but that will
+            // require a more holistic view of the whole layout "engine" in a later stage.
+            // Postponing ;)
+            if block.width == 0 || scrap_width == 0 {
+                eprintln!("scrap_width == 0, watch out here");
+                return; // Nothing to even draw, here. Why expend the energy?
+            }
+            let mut scrap = Block::new(scrap_width, block.height, background);
             let glyphs = text.chars().flat_map(|ch| font.glyph(ch));
             let mut x0 = 0;
             for glyph in glyphs {
                 let glyph_width = glyph.width as usize;
-                if x0 >= width {
-                    break;
-                }
                 for (y, row) in glyph.enumerate() {
                     for (xg, cell) in row.enumerate() {
                         let x = x0 + xg;
-                        if x >= width {
-                            continue;
-                        }
                         // TODO: This may be more efficient than what I did in Graph. May be
                         // worth investigating which is better.
-                        block.buf[y * width + x] = if cell { foreground } else { background };
+                        scrap.buf[y * scrap.width + x] = if cell { foreground } else { background };
                     }
                 }
                 x0 += glyph_width;
+            }
+
+            // TODO: Not loving how this match turned out. Seems kind of messy and with repetition
+            // that is confusing, since it obscures a more elegant insight.
+            match alignment {
+                Alignment::Left => {
+                    let end = usize::min(block.width, scrap.width);
+                    block
+                        .rows_mut()
+                        .zip(scrap.rows())
+                        .for_each(|(row, scrap_row)| {
+                            row[..end].copy_from_slice(&scrap_row[..end]);
+                        })
+                }
+                // TODO: The first two branches do the exact same thing. Figure out how to do this
+                // nicely.
+                // TODO: Decide on the actually correct behavior for Alignment::Center in this case.
+                Alignment::Center if scrap.width >= block.width => {
+                    let end = usize::min(block.width, scrap.width);
+                    block
+                        .rows_mut()
+                        .zip(scrap.rows())
+                        .for_each(|(row, scrap_row)| {
+                            row[..end].copy_from_slice(&scrap_row[..end]);
+                        })
+                }
+                Alignment::Center => {
+                    let remainder = block.width - scrap.width;
+                    let start = remainder / 2;
+                    block
+                        .rows_mut()
+                        .zip(scrap.rows())
+                        .for_each(|(row, scrap_row)| {
+                            row[start..start + scrap.width].copy_from_slice(&scrap_row);
+                        })
+                }
+                Alignment::Right => {
+                    let rstart = block.width.saturating_sub(scrap.width);
+                    let sstart = scrap.width.saturating_sub(block.width);
+                    block
+                        .rows_mut()
+                        .zip(scrap.rows())
+                        .for_each(|(row, scrap_row)| {
+                            row[rstart..].copy_from_slice(&scrap_row[sstart..]);
+                        })
+                }
             }
         }
 
         match &self.thing {
             ElementKind::Space | ElementKind::Padding(_) => {}
-            ElementKind::Text(text) => {
-                draw_text(&mut block, text, width, font, foreground, background)
-            }
+            ElementKind::Text(text) => draw_text(
+                &mut block,
+                text,
+                self.alignment,
+                font,
+                foreground,
+                background,
+            ),
             ElementKind::Paragraph(text, _, height) => {
                 let mut y = 0;
                 for line in text.as_ref().lines() {
@@ -180,7 +257,7 @@ impl<D> DrawBlock for Element<D> {
                     draw_text(
                         &mut line_block,
                         line,
-                        width,
+                        self.alignment,
                         font,
                         foreground,
                         background,
@@ -239,4 +316,12 @@ pub enum ElementKind<D> {
 
     Row(Vec<Element<D>>),
     Stack(Vec<Element<D>>),
+}
+
+#[derive(Default, Clone, Copy)]
+pub enum Alignment {
+    #[default]
+    Left,
+    Center,
+    Right,
 }
