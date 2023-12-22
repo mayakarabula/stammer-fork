@@ -75,6 +75,7 @@ impl<D> Element<D> {
             // These are not collection ElementKinds, and therefore do not require their children
             // to be updated.
             ElementKind::Space
+            | ElementKind::Padding(_)
             | ElementKind::Text(_)
             | ElementKind::Paragraph(_, _, _)
             | ElementKind::Graph(_) => {}
@@ -94,6 +95,7 @@ impl<D> DrawBlock for Element<D> {
         // Otherwise, calculate the width from the current content.
         match &self.thing {
             ElementKind::Space => font.determine_width("  ") as usize,
+            ElementKind::Padding(width) => *width,
             ElementKind::Text(t) => font.determine_width(&t),
             ElementKind::Paragraph(_, width, _) => *width,
             ElementKind::Graph(g) => g.len(),
@@ -110,7 +112,10 @@ impl<D> DrawBlock for Element<D> {
     // the same Font::GLYPH_HEIGHT?
     fn block_height(&self, _font: &Font) -> usize {
         match &self.thing {
-            ElementKind::Space | ElementKind::Text(_) | ElementKind::Graph(_) => Font::GLYPH_HEIGHT,
+            ElementKind::Space
+            | ElementKind::Padding(_)
+            | ElementKind::Text(_)
+            | ElementKind::Graph(_) => Font::GLYPH_HEIGHT,
             ElementKind::Paragraph(_, _, height) => *height,
             ElementKind::Row(row) => row
                 .iter()
@@ -163,7 +168,7 @@ impl<D> DrawBlock for Element<D> {
         }
 
         match &self.thing {
-            ElementKind::Space => {}
+            ElementKind::Space | ElementKind::Padding(_) => {}
             ElementKind::Text(text) => {
                 draw_text(&mut block, text, width, font, foreground, background)
             }
@@ -219,6 +224,7 @@ impl<D> DrawBlock for Element<D> {
 
 pub enum ElementKind<D> {
     Space,
+    Padding(usize),
 
     Text(String),
     Paragraph(WrappedText, usize, usize),
