@@ -21,10 +21,16 @@ impl WrappedText {
         // Please note that this is not a particularly good implementation.
         let mut wrapped = String::new();
         let mut scrap = String::new(); // Space to build a new line before pushing it to wrapped.
-        for line in text.lines() {
+        let linecount = text.lines().count(); // TODO: Is this very inefficient?
+        for (n, line) in text.lines().enumerate() {
             // If it already would fit well, we don't need to do anything.
             if font.determine_width(line) <= width {
                 wrapped.push_str(line);
+                // Unless this is a last line that is not empty (which indicates it is just a
+                // newline in the source text), push a newline to prepare for the next line.
+                if n + 1 != linecount || line.is_empty() {
+                    wrapped.push('\n');
+                }
                 continue;
             }
 
@@ -65,6 +71,7 @@ impl WrappedText {
                 line_width += ch_width;
             }
 
+            wrapped.push_str(&scrap);
             scrap.clear();
             wrapped.push('\n');
         }
@@ -90,5 +97,96 @@ impl ToString for WrappedText {
     /// To get the inner [`String`] directly, use [`WrappedText::unveil`].
     fn to_string(&self) -> String {
         self.0.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FONT: Font = unsafe { std::mem::transmute(*include_bytes!("../../cream12.uf2")) };
+
+    #[test]
+    fn minimal() {
+        let text = "hello dear\nworld";
+        let enough_width = WrappedText::new(text, 200, &FONT);
+        assert_eq!(enough_width.as_ref(), text);
+        let wrapped = WrappedText::new(text, 50, &FONT);
+        assert_eq!(wrapped.as_ref(), "hello\ndear\nworld");
+    }
+
+    #[test]
+    fn lorem() {
+        let lorem = include_str!("../../examples/lorem.txt");
+        let wrapped = WrappedText::new(lorem, 300, &FONT);
+        let correct = "Lorem ipsum dolor sit amet, officia excepteur ex\nfugiat reprehenderit \
+            enim labore culpa sint ad\nnisi Lorem pariatur mollit ex esse exercitation\namet. \
+            Nisi anim cupidatat excepteur officia.\nReprehenderit nostrud nostrud ipsum Lorem \
+            est\naliquip amet voluptate voluptate dolor minim\nnulla est proident. Nostrud off\
+            icia pariatur ut\nofficia. Sit irure elit esse ea nulla sunt ex\noccaecat reprehen\
+            derit commodo officia dolor\nLorem duis laboris cupidatat officia voluptate.\nCulp\
+            a proident adipisicing id nulla nisi laboris ex\nin Lorem sunt duis officia eiusmo\
+            d. Aliqua\nreprehenderit commodo ex non excepteur duis\nsunt velit enim. Voluptate \
+            laboris sint cupidatat\nullamco ut ea consectetur et est culpa et culpa\nduis.\n";
+        assert_eq!(wrapped.as_ref(), correct);
+    }
+
+    #[test]
+    fn short_lines() {
+        let text = "This is some text
+with some lines that
+are obvious quite short.
+In fact, they are much
+shorter than 400 pixels.";
+        let wrapped = WrappedText::new(text, 400, &FONT);
+        assert_eq!(wrapped.as_ref(), text);
+    }
+
+    #[test]
+    fn messy_whitespace() {
+        // Quote from  Sadie Plant (1997), Zeros+Ones, p. 127.
+        let text = r#"
+
+Or does the error always come first? It was, after all, Grace
+Hopper who, writing the software for the first electronic
+
+
+
+
+programmable computer, introduced the terms "bug" and 
+"debug" to computer programming when she found a
+
+
+
+moth interrupting the smooth circuits of her new machine.
+
+
+
+"#;
+        let wrapped = WrappedText::new(text, 300, &FONT);
+        let correct = r#"
+
+Or does the error always come first? It was, after
+all, Grace
+Hopper who, writing the software for the first
+electronic
+
+
+
+
+programmable computer, introduced the terms
+"bug" and 
+"debug" to computer programming when she
+found a
+
+
+
+moth interrupting the smooth circuits of her new
+machine.
+
+
+
+"#;
+        assert_eq!(wrapped.as_ref(), correct);
     }
 }
