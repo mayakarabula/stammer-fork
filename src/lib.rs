@@ -1,7 +1,6 @@
 use block::{Block, DrawBlock};
 use elements::Element;
 use fleck::Font;
-use pixels::Pixels;
 
 mod block;
 pub mod elements;
@@ -56,14 +55,20 @@ impl<D> Raam<D> {
         self.elements.update(&self.data)
     }
 
-    pub fn draw(&self, pixels: &mut Pixels) {
+    /// Draw the [`Raam`] onto a pixel buffer.
+    ///
+    /// The pixel buffer is provided as a mutable slice of bytes. It is assumed that this buffer
+    /// uses the same pixel representation as [`Block`], which is 32-bit rgba pixels. 
+    ///
+    /// See also: [`Pixel`].
+    pub fn draw(&self, pixels: &mut [u8]) {
         let mut block = Block::new(self.width as usize, self.height as usize, self.background);
 
         // Draw onto our block.
         block.paint(self.elements.block(&self.font), 0, 0);
 
         // Draw the block onto the pixels.
-        block.draw_onto_pixels(pixels, 0);
+        block.draw_onto_pixels(pixels);
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {

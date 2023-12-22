@@ -175,7 +175,7 @@ fn main() -> Result<(), pixels::Error> {
                 eprintln!("INFO: Redrawing...");
                 // Update the state, then draw.
                 state.update();
-                state.draw(&mut pixels);
+                state.draw(&mut pixels.frame_mut());
 
                 // Try to render.
                 if let Err(err) = pixels.render() {

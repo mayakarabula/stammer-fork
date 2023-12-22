@@ -1,5 +1,4 @@
 use fleck::Font;
-use pixels::Pixels;
 
 use crate::{Pixel, Rows, RowsMut, PIXEL_SIZE};
 
@@ -78,17 +77,20 @@ impl Block {
         }
     }
 
-    /// Draws this [`Block`]s contents onto the provided [`Pixels`].
-    pub(crate) fn draw_onto_pixels(&self, pixels: &mut Pixels, start_x: usize) {
-        // let size = pixels.texture().size();
-        // assert_eq!(size.width as usize, self.width);
-        // assert_eq!(size.height as usize, Self::HEIGHT);
+    /// Draws this [`Block`]s contents onto the provided pixel buffer.
+    ///
+    /// The pixel buffer is provided as a mutable slice of bytes. It is assumed that this buffer
+    /// uses the same pixel representation as [`Block`], which is 32-bit rgba pixels. 
+    ///
+    /// See also: [`Pixel`].
+    pub(crate) fn draw_onto_pixels(&self, pixels: &mut [u8]) {
+        assert!(pixels.len() >= self.buf.len() , "pixel buffer is not large enough");
         for (y, row) in self.rows().enumerate() {
-            let idx = (y * self.width + start_x) * PIXEL_SIZE;
+            let idx = (y * self.width) * PIXEL_SIZE;
             // TODO: See if we can get rid of this iter(). Perhaps through feature(slice_flatten)?
             // TODO: Where should the .copied() go, ideally?
             let row_bytes: Vec<_> = row.iter().copied().flatten().collect();
-            pixels.frame_mut()[idx..idx + row_bytes.len()].copy_from_slice(&row_bytes);
+            pixels[idx..idx + row_bytes.len()].copy_from_slice(&row_bytes);
         }
     }
 }
