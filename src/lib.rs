@@ -15,6 +15,7 @@ type Rows<'b> = std::slice::ChunksExact<'b, Pixel>;
 /// An iterator over mutable rows of [`Pixel`]s.
 type RowsMut<'b> = std::slice::ChunksExactMut<'b, Pixel>;
 
+/// Note: 'raam' is dutch for window. This is entirly a bikeshed name.
 pub struct Raam<D> {
     pub width: u32,
     pub height: u32,
