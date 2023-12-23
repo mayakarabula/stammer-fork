@@ -85,6 +85,7 @@ impl<D> Element<D> {
             ElementKind::Row(elements) | ElementKind::Stack(elements) => {
                 elements.iter_mut().for_each(|element| element.update(data))
             }
+            ElementKind::Scroll(element, _, _) => element.update(data),
             // These are not collection ElementKinds, and therefore do not require their children
             // to be updated.
             ElementKind::Space
@@ -112,6 +113,7 @@ impl<D> DrawBlock for Element<D> {
             ElementKind::Text(t) => font.determine_width(&t),
             ElementKind::Paragraph(_, width, _) => *width,
             ElementKind::Graph(g) => g.len(),
+            ElementKind::Scroll(element, _, _) => element.block_width(font),
             ElementKind::Row(row) => row.iter().map(|element| element.block_width(font)).sum(),
             ElementKind::Stack(stack) => stack
                 .iter()
@@ -130,6 +132,7 @@ impl<D> DrawBlock for Element<D> {
             | ElementKind::Text(_)
             | ElementKind::Graph(_) => Font::GLYPH_HEIGHT,
             ElementKind::Paragraph(_, _, height) => *height,
+            ElementKind::Scroll(_, height, _) => *height,
             ElementKind::Row(row) => row
                 .iter()
                 .map(|element| element.block_height(_font))
@@ -283,6 +286,22 @@ impl<D> DrawBlock for Element<D> {
                     rows[y][x] = [0x66, 0x33, 0x99, 0xff]
                 }
             }
+            ElementKind::Scroll(element, height, pos) => {
+                // We can just skip drawing anything if the content is scrolled out of view.
+                if height > pos {
+                    let mut scrollable = element.block(font);
+
+                    // We cut off the top of this block by `pos` rows, but not beyond the height of the
+                    // block.
+                    let start = usize::min(scrollable.height, *pos);
+                    // TODO: I don't love this .to_vec() here, and we could whip out some fun
+                    // unsafe but there's probably a better way regardless. Moving on.
+                    scrollable.buf = scrollable.buf[start * scrollable.width..].to_vec();
+                    scrollable.height = usize::min(scrollable.height - start, *height);
+
+                    block.paint(scrollable, 0, 0)
+                }
+            }
             ElementKind::Row(row) => {
                 let row_blocks = row.iter().map(|element| element.block(font));
                 let mut x = 0;
@@ -321,6 +340,8 @@ pub enum ElementKind<D> {
     /// Simple graph.
     Graph(Graph),
 
+    /// Vertically scrolling container.
+    Scroll(Box<Element<D>>, usize, usize),
     /// Horizontal container.
     Row(Vec<Element<D>>),
     /// Vertical container.

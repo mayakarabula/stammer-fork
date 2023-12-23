@@ -15,6 +15,7 @@ use winit_input_helper::{TextChar, WinitInputHelper};
 const WINDOW_NAME: &str = env!("CARGO_BIN_NAME");
 
 const LOREM: &str = include_str!("lorem.txt");
+const SCROLL_STEP: usize = 8;
 
 fn setup_window(min_size: PhysicalSize<u32>, event_loop: &EventLoop<()>) -> Window {
     let builder = WindowBuilder::new()
@@ -48,6 +49,16 @@ fn setup_elements() -> Element<Data> {
         text.push_str(data.address.as_str())
     }
 
+    fn update_scroll(thing: &mut ElementKind<Data>, data: &Data) {
+        // TODO: This whole practice is a mess and is horrible and oh no.
+        let ElementKind::Scroll(_, _, pos) = thing else {
+            unreachable!()
+        };
+        eprint!("updating scroll from {pos}");
+        *pos = data.scroll_pos;
+        eprint!(" to {pos}");
+    }
+
     fn display_text(thing: &mut ElementKind<Data>, data: &Data) {
         // TODO: This whole practice is a mess and is horrible and oh no.
         let ElementKind::Paragraph(text, width, _) = thing else {
@@ -69,8 +80,17 @@ fn setup_elements() -> Element<Data> {
         use ElementKind::*;
         Element::still(Stack(vec![
             Element::dynamic(display_address, Text("---".to_string())),
-            Element::dynamic(display_text, Paragraph(WrappedText::default(), 600, 400))
-                .with_alignment(Alignment::Center),
+            Element::dynamic(
+                update_scroll,
+                Scroll(
+                    Box::new(
+                        Element::dynamic(display_text, Paragraph(WrappedText::default(), 600, 400))
+                            .with_alignment(Alignment::Center),
+                    ),
+                    300,
+                    0,
+                ),
+            ),
             Element::dynamic(display_mode, Text("---".to_string())),
         ]))
     }
@@ -78,6 +98,7 @@ fn setup_elements() -> Element<Data> {
 
 struct Data {
     text: String,
+    scroll_pos: usize,
     address: String,
     mode: Mode,
     // TODO: Implement scrolling on Paragraph (through some kind of wrapper?). May in fact become a
@@ -127,7 +148,8 @@ fn main() -> Result<(), pixels::Error> {
 
     let elements = setup_elements();
     let data = Data {
-        text: LOREM.to_string(),
+        text: [LOREM; 3].concat().to_string(),
+        scroll_pos: 0,
         address: "gemini://example.com/".to_string(),
         mode: Mode::Normal,
         font: font.clone(), // TODO: Completely unnecessary with some better design. But it works.
@@ -188,6 +210,18 @@ fn main() -> Result<(), pixels::Error> {
         }
 
         if input.update(&event) {
+            // Scroll around.
+            if input.key_pressed(VirtualKeyCode::Up) | input.key_pressed(VirtualKeyCode::K) {
+                let pos = &mut state.data_mut().scroll_pos;
+                *pos = pos.saturating_sub(SCROLL_STEP);
+                window.request_redraw();
+            }
+
+            if input.key_pressed(VirtualKeyCode::Down) | input.key_pressed(VirtualKeyCode::J) {
+                state.data_mut().scroll_pos += SCROLL_STEP;
+                window.request_redraw();
+            }
+
             // Set mode.
             {
                 let data = state.data_mut();
