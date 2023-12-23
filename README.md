@@ -6,6 +6,8 @@ Do not use this.
 
 [a thread with a video and pictures of my progress](https://hachyderm.io/@ma3ke/111618405094260312)
 
+[a little video of scrolling in examples/reader.rs](https://hachyderm.io/@ma3ke/111632185354245376)
+
 This project started as a way of breaking out the ui/rendering code for [_tid_](https://git.sr.ht/~ma3ke/tid/) and [_gemininini_](https://github.com/mayakarabula/gemininini/).
 In the future, it _may_ be used as their ui backend. Or not. We'll see.
 
