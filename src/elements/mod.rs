@@ -277,6 +277,8 @@ impl<D> DrawBlock for Element<D> {
                     .iter()
                     .map(|v| height - ((v - min) / (max - min) * height as f32).round() as usize);
                 let mut rows: Vec<_> = block.rows_mut().collect();
+                // TODO: (easy) Add at least the option to draw the old-style (like original tid)
+                // long bars that extend from the bottom to the (x, y) point.
                 for (x, y) in points.enumerate() {
                     rows[y][x] = [0x66, 0x33, 0x99, 0xff]
                 }
@@ -306,14 +308,22 @@ impl<D> DrawBlock for Element<D> {
 }
 
 pub enum ElementKind<D> {
+    /// Font-dependent spacer.
     Space,
+    /// Fixed-sized spacer with a width in pixels.
     Padding(usize),
 
+    /// Simple single-line text. Very useful for labels.
     Text(String),
+    // TODO: (easy) May want to convert this to a named struct (Paragraph { text: .., width: .. ..}
+    /// Paragraph with wrapped text, a width, and a height.
     Paragraph(WrappedText, usize, usize),
+    /// Simple graph.
     Graph(Graph),
 
+    /// Horizontal container.
     Row(Vec<Element<D>>),
+    /// Vertical container.
     Stack(Vec<Element<D>>),
 }
 

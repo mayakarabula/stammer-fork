@@ -7,6 +7,7 @@ pub mod elements;
 
 /// The number of bytes per [`Pixel`].
 pub const PIXEL_SIZE: usize = 4;
+/// A pixel in the form `[r, g, b, a]`.
 pub type Pixel = [u8; PIXEL_SIZE];
 
 /// An iterator over rows of [`Pixel`]s.
@@ -14,7 +15,7 @@ type Rows<'b> = std::slice::ChunksExact<'b, Pixel>;
 /// An iterator over mutable rows of [`Pixel`]s.
 type RowsMut<'b> = std::slice::ChunksExactMut<'b, Pixel>;
 
-/// Note: 'raam' is dutch for window. This is entirly a bikeshed name.
+/// Note: 'raam' is dutch for window. This is entirely a bikeshed name.
 pub struct Raam<D> {
     pub width: u32,
     pub height: u32,
@@ -46,6 +47,7 @@ impl<D> Raam<D> {
         }
     }
 
+    /// Returns a mutable reference to the data of this [`Raam<D>`].
     pub fn data_mut(&mut self) -> &mut D {
         &mut self.data
     }
@@ -58,7 +60,7 @@ impl<D> Raam<D> {
     /// Draw the [`Raam`] onto a pixel buffer.
     ///
     /// The pixel buffer is provided as a mutable slice of bytes. It is assumed that this buffer
-    /// uses the same pixel representation as [`Block`], which is 32-bit rgba pixels. 
+    /// uses the same pixel representation as [`Block`], which is 32-bit RGBA pixels.
     ///
     /// See also: [`Pixel`].
     pub fn draw(&self, pixels: &mut [u8]) {

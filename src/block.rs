@@ -80,11 +80,14 @@ impl Block {
     /// Draws this [`Block`]s contents onto the provided pixel buffer.
     ///
     /// The pixel buffer is provided as a mutable slice of bytes. It is assumed that this buffer
-    /// uses the same pixel representation as [`Block`], which is 32-bit rgba pixels. 
+    /// uses the same pixel representation as [`Block`], which is 32-bit rgba pixels.
     ///
     /// See also: [`Pixel`].
     pub(crate) fn draw_onto_pixels(&self, pixels: &mut [u8]) {
-        assert!(pixels.len() >= self.buf.len() , "pixel buffer is not large enough");
+        assert!(
+            pixels.len() >= self.buf.len(),
+            "pixel buffer is not large enough"
+        );
         for (y, row) in self.rows().enumerate() {
             let idx = (y * self.width) * PIXEL_SIZE;
             // TODO: See if we can get rid of this iter(). Perhaps through feature(slice_flatten)?
