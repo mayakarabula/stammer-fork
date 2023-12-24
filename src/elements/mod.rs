@@ -253,7 +253,7 @@ impl<D> DrawBlock for Element<D> {
             ),
             ElementKind::Paragraph(text, width, height) => {
                 let mut y = 0;
-                for line in text.as_ref().lines() {
+                for line in text.lines() {
                     let mut line_block = Block::new(*width, font.height(), background);
                     draw_text(
                         &mut line_block,

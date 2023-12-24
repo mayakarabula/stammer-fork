@@ -1,3 +1,5 @@
+#![feature(iter_intersperse)]
+
 use block::{Block, DrawBlock};
 use elements::Element;
 use fleck::Font;

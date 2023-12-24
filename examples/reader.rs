@@ -62,7 +62,7 @@ fn setup_elements() -> Element<Data> {
         let ElementKind::Paragraph(text, width, _) = thing else {
             unreachable!()
         };
-        *text = WrappedText::new(&data.text, *width, &data.font)
+        *text = WrappedText::new(data.text.clone(), *width, &data.font)
     }
 
     fn display_mode(thing: &mut ElementKind<Data>, data: &Data) {

@@ -2,101 +2,80 @@ use fleck::Font;
 
 /// A wrapper for a [`String`] where its contents are guaranteed to be wrapped at construction.
 #[derive(Debug, Default, Clone)]
-pub struct WrappedText(String);
+pub struct WrappedText(String, Vec<usize>);
 
 impl WrappedText {
     /// Creates a new [`WrappedText`] that will be wrapped to the specified `width` and according
     /// to the glyphs in the provided [`Font`].
-    pub fn new(text: &str, width: usize, font: &Font) -> Self {
-        // TODO: I don't know whether this makes any sense. Never measured it. I like it because it
-        // may prevent two allocations but also, who cares.
-        if text
-            .lines()
-            .map(|line| font.determine_width(line))
-            .all(|lw| lw <= width)
-        {
-            return Self(text.to_string());
-        }
+    pub fn new(text: String, width: usize, font: &Font) -> Self {
+        // TODO: Do this optimization that I had this note for:
+        // > TODO: I don't know whether this makes any sense. Never measured it. I like it because
+        // > it may prevent two allocations but also, who cares.
 
-        // Please note that this is not a particularly good implementation.
-        let mut wrapped = String::new();
-        let mut scrap = String::new(); // Space to build a new line before pushing it to wrapped.
-        let linecount = text.lines().count(); // TODO: Is this very inefficient?
-        for (n, line) in text.lines().enumerate() {
-            // If it already would fit well, we don't need to do anything.
-            if font.determine_width(line) <= width {
-                wrapped.push_str(line);
-                // Unless this is a last line that is not empty (which indicates it is just a
-                // newline in the source text), push a newline to prepare for the next line.
-                if n + 1 != linecount || line.is_empty() {
-                    wrapped.push('\n');
+        // TODO: Equal starts optimization.
+
+        let mut breaklist = Vec::new();
+        let mut scrapwidth = 0;
+        let mut wordwidth = 0;
+        // FIXME: There may be a bug with a very long unbroken first line because we set it to 0
+        // here. Maybe consider a None here.
+        let mut last_whitespace = None;
+        for (idx, ch) in text.char_indices() {
+            match ch {
+                '\n' => {
+                    scrapwidth = 0;
+                    wordwidth = 0;
+                    last_whitespace = None; // FIXME: Or None?
+                    breaklist.push(idx)
                 }
-                continue;
-            }
-
-            // Otherwise, we will have to wrap the line ourselves.
-            let mut line_width = 0; // The pixel width of the line under construction (`scrap`).
-            for ch in line.chars() {
-                let ch_width = font
-                    .glyph(ch)
-                    .map(|gl| gl.width as usize)
-                    .unwrap_or_default();
-                if line_width + ch_width > width {
-                    if let Some(breakpoint) = scrap.rfind(char::is_whitespace) {
-                        wrapped.push_str(&scrap[..breakpoint]);
-                        wrapped.push('\n');
-                        // The `overhang` is the part of `scrap` after the breaking whitespace.
-                        let overhang = &scrap[breakpoint + 1..];
-                        line_width = font.determine_width(overhang);
-                        // We want to internally copy the overhang onto the start of the string.
-                        // An equivalent method would be `scrap = overhang.to_string()`, but by
-                        // doing it like this, we avoid an allocation.
-                        let scrap_head = scrap.as_ptr() as *mut u8;
-                        for (i, &b) in overhang.as_bytes().iter().enumerate() {
-                            // Safety: The length of `overhang` is equal or greater than the length
-                            // of `scrap`, since `overhang` is a slice of `scrap`. Therefore, the
-                            // pointer add will always be in bounds.
-                            unsafe { std::ptr::write(scrap_head.wrapping_add(i), b) }
-                        }
-                        scrap.truncate(overhang.len());
+                ch => {
+                    if ch.is_whitespace() {
+                        last_whitespace = Some(idx);
+                        wordwidth = 0;
+                    }
+                    let glyphwidth = font.glyph(ch).map_or(0, |ch| ch.width) as usize;
+                    if scrapwidth + glyphwidth > width {
+                        let br = match last_whitespace {
+                            Some(br) => br,
+                            None => {
+                                wordwidth = 0;
+                                idx
+                            }
+                        };
+                        breaklist.push(br);
+                        wordwidth += glyphwidth;
+                        scrapwidth = wordwidth;
                     } else {
-                        wrapped.push_str(&scrap);
-                        wrapped.push('\n');
-                        scrap.clear();
-                        line_width = 0;
+                        wordwidth += glyphwidth;
+                        scrapwidth += glyphwidth;
                     }
                 }
-
-                scrap.push(ch);
-                line_width += ch_width;
             }
-
-            wrapped.push_str(&scrap);
-            scrap.clear();
-            wrapped.push('\n');
         }
 
-        WrappedText(wrapped)
+        breaklist.push(text.len());
+
+        WrappedText(text, breaklist)
     }
 
-    /// Get the inner wrapped [`String`], consuming the [`WrappedText`].
-    pub fn unveil(self) -> String {
-        self.0
+    pub fn lines(&self) -> impl Iterator<Item = &str> {
+        let mut runner = 0;
+        self.1.iter().map(move |&breakpoint| {
+            let a = &self.0[runner..breakpoint];
+            runner = breakpoint;
+            if a.chars().next().is_some_and(|ch| ch.is_whitespace()) {
+                &a[1..]
+            } else {
+                a
+            }
+        })
     }
-}
 
-impl AsRef<str> for WrappedText {
-    fn as_ref(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl ToString for WrappedText {
-    /// # Note
+    /// Return a wrapped [`String`].
     ///
-    /// To get the inner [`String`] directly, use [`WrappedText::unveil`].
-    fn to_string(&self) -> String {
-        self.0.to_string()
+    /// It may be more efficient to use the [`WrappedText::lines`] directly, if that is actually what you need.
+    pub fn wrapped(&self) -> String {
+        self.lines().intersperse("\n").collect()
     }
 }
 
@@ -108,16 +87,16 @@ mod tests {
 
     #[test]
     fn minimal() {
-        let text = "hello dear\nworld";
-        let enough_width = WrappedText::new(text, 200, &FONT);
-        assert_eq!(enough_width.as_ref(), text);
+        let text = "hello dear\nworld".to_string();
+        let enough_width = WrappedText::new(text.clone(), 200, &FONT);
+        assert_eq!(enough_width.wrapped(), text);
         let wrapped = WrappedText::new(text, 50, &FONT);
-        assert_eq!(wrapped.as_ref(), "hello\ndear\nworld");
+        assert_eq!(wrapped.wrapped(), "hello\ndear\nworld");
     }
 
     #[test]
     fn lorem() {
-        let lorem = include_str!("../../examples/lorem.txt");
+        let lorem = include_str!("../../examples/lorem.txt").to_string();
         let wrapped = WrappedText::new(lorem, 300, &FONT);
         let correct = "Lorem ipsum dolor sit amet, officia excepteur ex\nfugiat reprehenderit \
             enim labore culpa sint ad\nnisi Lorem pariatur mollit ex esse exercitation\namet. \
@@ -128,7 +107,7 @@ mod tests {
             a proident adipisicing id nulla nisi laboris ex\nin Lorem sunt duis officia eiusmo\
             d. Aliqua\nreprehenderit commodo ex non excepteur duis\nsunt velit enim. Voluptate \
             laboris sint cupidatat\nullamco ut ea consectetur et est culpa et culpa\nduis.\n";
-        assert_eq!(wrapped.as_ref(), correct);
+        assert_eq!(wrapped.wrapped(), correct);
     }
 
     #[test]
@@ -138,8 +117,29 @@ with some lines that
 are obvious quite short.
 In fact, they are much
 shorter than 400 pixels.";
-        let wrapped = WrappedText::new(text, 400, &FONT);
-        assert_eq!(wrapped.as_ref(), text);
+        let wrapped = WrappedText::new(text.to_string(), 400, &FONT);
+        assert_eq!(wrapped.wrapped(), text);
+    }
+
+    #[test]
+    fn long_lines() {
+        let text = "Thequickbrownfoxjumpsoverthelazydog!!!!!
+0123456789012345678901234567890123456789
+
+abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
+
+";
+        let correct = "Thequickbrownfoxjumpsoverthela
+zydog!!!!!
+012345678901234567890123456789
+0123456789
+
+abcdefghijklmnopqrstuvwxyzABCD
+EFGHIJKLMNOPQRSTUVWXYZ
+
+";
+        let wrapped = WrappedText::new(text.to_string(), 200, &FONT);
+        assert_eq!(wrapped.wrapped(), correct);
     }
 
     #[test]
@@ -163,7 +163,7 @@ moth interrupting the smooth circuits of her new machine.
 
 
 "#;
-        let wrapped = WrappedText::new(text, 300, &FONT);
+        let wrapped = WrappedText::new(text.to_string(), 300, &FONT);
         let correct = r#"
 
 Or does the error always come first? It was, after
@@ -187,6 +187,6 @@ machine.
 
 
 "#;
-        assert_eq!(wrapped.as_ref(), correct);
+        assert_eq!(wrapped.wrapped(), correct);
     }
 }
