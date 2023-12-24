@@ -54,9 +54,7 @@ fn setup_elements() -> Element<Data> {
         let ElementKind::Scroll(_, _, pos) = thing else {
             unreachable!()
         };
-        eprint!("updating scroll from {pos}");
         *pos = data.scroll_pos;
-        eprint!(" to {pos}");
     }
 
     fn display_text(thing: &mut ElementKind<Data>, data: &Data) {

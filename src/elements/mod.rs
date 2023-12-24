@@ -176,7 +176,6 @@ impl<D> DrawBlock for Element<D> {
             // require a more holistic view of the whole layout "engine" in a later stage.
             // Postponing ;)
             if block.width == 0 || scrap_width == 0 {
-                eprintln!("scrap_width == 0, watch out here");
                 return; // Nothing to even draw, here. Why expend the energy?
             }
             let mut scrap = Block::new(scrap_width, block.height, background);
