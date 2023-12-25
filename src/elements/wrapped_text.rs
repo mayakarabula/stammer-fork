@@ -71,6 +71,11 @@ impl WrappedText {
         })
     }
 
+    /// Returns the number of wrapped lines in this [`WrappedText`].
+    pub fn lines_count(&self) -> usize {
+        self.1.len()
+    }
+
     /// Return a wrapped [`String`].
     ///
     /// It may be more efficient to use the [`WrappedText::lines`] directly, if that is actually what you need.
@@ -188,5 +193,13 @@ machine.
 
 "#;
         assert_eq!(wrapped.wrapped(), correct);
+    }
+
+    #[test]
+    fn lines_count() {
+        let lorem = include_str!("../../examples/lorem.txt").to_string();
+        let wrapped = WrappedText::new(lorem, 300, &FONT);
+        assert_eq!(wrapped.lines_count(), wrapped.lines().count());
+        assert_eq!(wrapped.lines_count(), 17);
     }
 }
