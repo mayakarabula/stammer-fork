@@ -7,16 +7,22 @@ pub struct WrappedText(String, Vec<usize>);
 impl WrappedText {
     /// Creates a new [`WrappedText`] that will be wrapped to the specified `width` and according
     /// to the glyphs in the provided [`Font`].
-    pub fn new(text: String, width: usize, font: &Font) -> Self {
+    pub fn new(text: String, width: u32, font: &Font) -> Self {
+        let mut ret = Self(text, Vec::new());
+        ret.rewrap(Some(width), font);
+        ret
+    }
+
+    pub fn rewrap(&mut self, maxwidth: Option<u32>, font: &Font) {
         // TODO: Do this optimization that I had this note for:
         // > TODO: I don't know whether this makes any sense. Never measured it. I like it because
         // > it may prevent two allocations but also, who cares.
 
         // TODO: Equal starts optimization.
 
-        let mut breaklist = Vec::new();
-        let mut scrapwidth = 0;
-        let mut wordwidth = 0;
+        let Self(text, breaklist) = self;
+        let mut scrapwidth = 0u32;
+        let mut wordwidth = 0u32;
         // FIXME: There may be a bug with a very long unbroken first line because we set it to 0
         // here. Maybe consider a None here.
         let mut last_whitespace = None;
@@ -28,13 +34,14 @@ impl WrappedText {
                     last_whitespace = None; // FIXME: Or None?
                     breaklist.push(idx)
                 }
-                ch => {
+                ch if maxwidth.is_some() => {
                     if ch.is_whitespace() {
                         last_whitespace = Some(idx);
                         wordwidth = 0;
                     }
-                    let glyphwidth = font.glyph(ch).map_or(0, |ch| ch.width) as usize;
-                    if scrapwidth + glyphwidth > width {
+                    let glyphwidth = font.glyph(ch).map_or(0, |ch| ch.width) as u32;
+                    // TODO: Think about this unwrap().
+                    if scrapwidth + glyphwidth > maxwidth.unwrap() {
                         let br = match last_whitespace {
                             Some(br) => br,
                             None => {
@@ -50,12 +57,11 @@ impl WrappedText {
                         scrapwidth += glyphwidth;
                     }
                 }
+                _ => {}
             }
         }
 
         breaklist.push(text.len());
-
-        WrappedText(text, breaklist)
     }
 
     pub fn lines(&self) -> impl Iterator<Item = &str> {

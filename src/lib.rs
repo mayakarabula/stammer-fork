@@ -1,8 +1,7 @@
 #![feature(iter_intersperse)]
 
 use block::{Block, DrawBlock};
-use elements::Element;
-use fleck::Font;
+use elements::{Dimensions, Element};
 
 mod block;
 pub mod elements;
@@ -17,33 +16,25 @@ type Rows<'b> = std::slice::ChunksExact<'b, Pixel>;
 /// An iterator over mutable rows of [`Pixel`]s.
 type RowsMut<'b> = std::slice::ChunksExactMut<'b, Pixel>;
 
-/// Note: 'raam' is dutch for window. This is entirely a bikeshed name.
-pub struct Raam<D> {
+pub struct Panel<D> {
     pub width: u32,
     pub height: u32,
     pub foreground: Pixel,
     pub background: Pixel,
 
-    font: Box<Font>,
-
     data: D,
     elements: Element<D>,
 }
 
-impl<D> Raam<D> {
-    pub fn new(
-        elements: Element<D>,
-        font: Box<Font>,
-        foreground: Pixel,
-        background: Pixel,
-        data: D,
-    ) -> Self {
+impl<D> Panel<D> {
+    pub fn new(mut elements: Element<D>, foreground: Pixel, background: Pixel, data: D) -> Self {
+        elements.bake_size(); // We calculate the sizes in order to give the first estimate.
+        let Dimensions { width, height } = elements.overall_size();
         Self {
-            width: elements.block_width(&font) as u32,
-            height: elements.block_height(&font) as u32,
+            width,
+            height,
             foreground,
             background,
-            font,
             data,
             elements,
         }
@@ -56,7 +47,8 @@ impl<D> Raam<D> {
 
     /// Update all elements with the internal `data`.
     pub fn update(&mut self) {
-        self.elements.update(&self.data)
+        self.elements.update(&self.data);
+        self.elements.bake_size();
     }
 
     /// Draw the [`Raam`] onto a pixel buffer.
@@ -69,7 +61,7 @@ impl<D> Raam<D> {
         let mut block = Block::new(self.width as usize, self.height as usize, self.background);
 
         // Draw onto our block.
-        block.paint(self.elements.block(&self.font), 0, 0);
+        block.paint(self.elements.block(), 0, 0);
 
         // Draw the block onto the pixels.
         block.draw_onto_pixels(pixels);
