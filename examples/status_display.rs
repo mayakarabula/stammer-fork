@@ -1,13 +1,14 @@
 #![feature(array_chunks)]
 
 use std::collections::VecDeque;
+use std::rc::Rc;
 
 use fleck::Font;
 use pixels::wgpu::BlendState;
 use pixels::{PixelsBuilder, SurfaceTexture};
-use stammer::elements::Graph;
-use stammer::elements::{Element, ElementKind};
-use stammer::Raam;
+use stammer::elements::{Content, Element};
+use stammer::elements::{Graph, SizingStrategy};
+use stammer::Panel;
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::Event;
 use winit::event_loop::EventLoop;
@@ -38,7 +39,7 @@ fn load_font(path: &str) -> std::io::Result<Font> {
     Ok(font)
 }
 
-fn setup_elements() -> Element<Data> {
+fn setup_elements(font: Rc<Font>) -> Element<Data> {
     let graph_width = 150;
     let sine = Graph::from({
         // A lil sine wave.
@@ -60,17 +61,21 @@ fn setup_elements() -> Element<Data> {
         deque
     });
 
-    fn step_graph(thing: &mut ElementKind<Data>, data: &Data) {
-        // TODO: This whole practice is a mess and is horrible and oh no.
-        let ElementKind::Graph(graph) = thing else {
-            unreachable!()
-        };
-        graph.inner_mut().rotate_left(data.rotate_step);
-    }
+    // FIXME: Reintroduce Content::Graph or something like that. This will need some thought so
+    // please communicate before embarking on this. Could be in large part just taking the old
+    // implementation, which was perfectly fine. But the thinking will be in how it fits with the
+    // rest of the Elements.
+    // fn step_graph(element: &mut Element<Data>, data: &Data) {
+    //     // TODO: This whole practice is a mess and is horrible and oh no.
+    //     let Content::Graph(graph) = &mut element.content else {
+    //         unreachable!()
+    //     };
+    //     graph.inner_mut().rotate_left(data.rotate_step);
+    // }
 
-    fn display_step(thing: &mut ElementKind<Data>, data: &Data) {
+    fn display_step(element: &mut Element<Data>, data: &Data) {
         // TODO: This whole practice is a mess and is horrible and oh no.
-        let ElementKind::Text(text) = thing else {
+        let Content::Text(text) = &mut element.content else {
             unreachable!()
         };
         text.clear();
@@ -78,29 +83,63 @@ fn setup_elements() -> Element<Data> {
     }
 
     {
-        use ElementKind::*;
-        Element::still(Stack(vec![
-            Element::still(Row(vec![
-                Element::still(Text("measurement interval:".to_string())),
-                Element::still(Space),
-                Element::still(Space),
-                Element::dynamic(display_step, Text("---".to_string())),
-            ])),
-            Element::still(Space),
-            Element::still(Row(vec![
-                Element::still(Stack(vec![
-                    Element::still(Text("deflection coil phase".to_string())),
-                    Element::still(Space),
-                    Element::still(Text("tri-axial wave converter".to_string())),
-                ])),
-                Element::still(Space),
-                Element::still(Stack(vec![
-                    Element::dynamic(step_graph, Graph(sine)),
-                    Element::still(Space),
-                    Element::dynamic(step_graph, Graph(triangle)),
-                ])),
-            ])),
-        ]))
+        use Content::*;
+        Element::still(
+            Rc::clone(&font),
+            Stack(vec![
+                Element::still(
+                    Rc::clone(&font),
+                    Row(vec![
+                        Element::still(Rc::clone(&font), Text("measurement interval:".to_string()))
+                            .with_padding_right(16)
+                            .with_flex_right(true),
+                        Element::dynamic(display_step, Rc::clone(&font), Text("---".to_string())),
+                    ]),
+                )
+                .with_minwidth(400)
+                .with_strategy(SizingStrategy::Chonker)
+                .with_padding_bottom(16),
+                Element::still(
+                    Rc::clone(&font),
+                    Row(vec![
+                        Element::still(
+                            Rc::clone(&font),
+                            Stack(vec![
+                                Element::still(
+                                    Rc::clone(&font),
+                                    Text("deflection coil phase".to_string()),
+                                )
+                                .with_padding_bottom(16),
+                                Element::still(
+                                    Rc::clone(&font),
+                                    Text("tri-axial wave converter".to_string()),
+                                ),
+                            ]),
+                        )
+                        .with_flex_right(true),
+                        Element::still(
+                            Rc::clone(&font),
+                            Stack(vec![
+                                Element::still(
+                                    Rc::clone(&font),
+                                    Text("TODO: Graph placeholder.".to_string()),
+                                )
+                                .with_padding_bottom(16),
+                                Element::still(
+                                    Rc::clone(&font),
+                                    Text("TODO: Graph placeholder.".to_string()),
+                                ),
+                                // Element::dynamic(step_graph, Rc::clone(&font), Graph(sine)),
+                                // Element::dynamic(step_graph, Rc::clone(&font), Graph(triangle)),
+                            ]),
+                        ),
+                    ]),
+                )
+                .with_minwidth(400)
+                .with_strategy(SizingStrategy::Chonker),
+            ]),
+        )
+        .with_strategy(SizingStrategy::Chonker)
     }
 }
 
@@ -129,12 +168,11 @@ fn main() -> Result<(), pixels::Error> {
         .map(|v| v.round() as u32)
         .unwrap_or(1);
 
-    let elements = setup_elements();
+    let elements = setup_elements(Rc::new(font));
 
     let data = Data { rotate_step: 1 };
-    let mut state = Raam::new(
+    let mut state = Panel::new(
         elements,
-        Box::new(font),
         [0x00, 0x00, 0x00, 0xff],
         [0xff, 0xff, 0xff, 0xff],
         data,

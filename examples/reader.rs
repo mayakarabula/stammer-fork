@@ -1,11 +1,13 @@
 #![feature(array_chunks)]
 
+use std::rc::Rc;
+
 use fleck::Font;
 use pixels::wgpu::BlendState;
 use pixels::{PixelsBuilder, SurfaceTexture};
 use stammer::elements::{Alignment, WrappedText};
-use stammer::elements::{Element, ElementKind};
-use stammer::Raam;
+use stammer::elements::{Content, Element};
+use stammer::Panel;
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::EventLoop;
@@ -39,35 +41,36 @@ fn load_font(path: &str) -> std::io::Result<Font> {
     Ok(font)
 }
 
-fn setup_elements() -> Element<Data> {
-    fn display_address(thing: &mut ElementKind<Data>, data: &Data) {
+fn setup_elements(font: Rc<Font>) -> Element<Data> {
+    fn display_address(element: &mut Element<Data>, data: &Data) {
         // TODO: This whole practice is a mess and is horrible and oh no.
-        let ElementKind::Text(text) = thing else {
+        let Content::Text(text) = &mut element.content else {
             unreachable!()
         };
         text.clear();
         text.push_str(data.address.as_str())
     }
 
-    fn update_scroll(thing: &mut ElementKind<Data>, data: &Data) {
+    // FIXME: Implement ability to scroll containers for this to work.
+    // fn update_scroll(element: &mut Element<Data>, data: &Data) {
+    //     // TODO: This whole practice is a mess and is horrible and oh no.
+    //     let Content::Scroll(_, _, pos) = element else {
+    //         unreachable!()
+    //     };
+    //     *pos = data.scroll_pos;
+    // }
+
+    fn display_text(element: &mut Element<Data>, data: &Data) {
         // TODO: This whole practice is a mess and is horrible and oh no.
-        let ElementKind::Scroll(_, _, pos) = thing else {
+        let Content::Paragraph(text) = &mut element.content else {
             unreachable!()
         };
-        *pos = data.scroll_pos;
+        *text = WrappedText::new(data.text.clone(), data.width, &element.style.font)
     }
 
-    fn display_text(thing: &mut ElementKind<Data>, data: &Data) {
+    fn display_mode(element: &mut Element<Data>, data: &Data) {
         // TODO: This whole practice is a mess and is horrible and oh no.
-        let ElementKind::Paragraph(text, width, _) = thing else {
-            unreachable!()
-        };
-        *text = WrappedText::new(data.text.clone(), *width, &data.font)
-    }
-
-    fn display_mode(thing: &mut ElementKind<Data>, data: &Data) {
-        // TODO: This whole practice is a mess and is horrible and oh no.
-        let ElementKind::Text(text) = thing else {
+        let Content::Text(text) = &mut element.content else {
             unreachable!()
         };
         text.clear();
@@ -75,22 +78,25 @@ fn setup_elements() -> Element<Data> {
     }
 
     {
-        use ElementKind::*;
-        Element::still(Stack(vec![
-            Element::dynamic(display_address, Text("---".to_string())),
-            Element::dynamic(
-                update_scroll,
-                Scroll(
-                    Box::new(
-                        Element::dynamic(display_text, Paragraph(WrappedText::default(), 600, 400))
-                            .with_alignment(Alignment::Center),
-                    ),
-                    300,
-                    0,
-                ),
-            ),
-            Element::dynamic(display_mode, Text("---".to_string())),
-        ]))
+        use Content::*;
+        Element::still(
+            Rc::clone(&font),
+            Stack(vec![
+                Element::dynamic(display_address, Rc::clone(&font), Text("---".to_string())),
+                // FIXME: Implement ability to scroll containers for this to work.
+                // Element::dynamic(
+                //     update_scroll,Rc::clone(&font),
+                //     Scroll(
+                //         Box::new(
+                //             Element::dynamic(display_text,Rc::clone(&font),  Paragraph(WrappedText::default()))
+                //         ),
+                //         300,
+                //         0,
+                //     ),
+                // ),
+                Element::dynamic(display_mode, Rc::clone(&font), Text("---".to_string())),
+            ]),
+        )
     }
 }
 
@@ -99,10 +105,7 @@ struct Data {
     scroll_pos: usize,
     address: String,
     mode: Mode,
-    // TODO: Implement scrolling on Paragraph (through some kind of wrapper?). May in fact become a
-    // neat showcase of the notion of custom (wrapper) elements?
-    // scroll: usize,
-    font: Box<Font>,
+    width: u32,
 }
 
 #[derive(PartialEq, Eq)]
@@ -123,6 +126,13 @@ impl ToString for Mode {
 }
 
 fn main() -> Result<(), pixels::Error> {
+    todo!(
+        "This example is currently utterly broken.
+This repo is in a state of transition.
+    (there's a joke here somewhere about rust programmers)
+Please feel free to hack at the functionality that is currently broken!"
+    );
+
     let mut args = std::env::args().skip(1);
     let font_path = args
         .next()
@@ -134,7 +144,7 @@ fn main() -> Result<(), pixels::Error> {
             std::process::exit(1);
         }
     };
-    let font = Box::new(font);
+    let font = Rc::new(font);
 
     let event_loop = EventLoop::new();
 
@@ -144,17 +154,16 @@ fn main() -> Result<(), pixels::Error> {
         .map(|v| v.round() as u32)
         .unwrap_or(1);
 
-    let elements = setup_elements();
+    let elements = setup_elements(font);
     let data = Data {
         text: [LOREM; 3].concat().to_string(),
         scroll_pos: 0,
         address: "gemini://example.com/".to_string(),
         mode: Mode::Normal,
-        font: font.clone(), // TODO: Completely unnecessary with some better design. But it works.
+        width: 0,
     };
-    let mut state = Raam::new(
+    let mut state = Panel::new(
         elements,
-        font,
         [0x00, 0x00, 0x00, 0xff],
         [0xff, 0xff, 0xff, 0xff],
         data,
@@ -286,6 +295,7 @@ fn main() -> Result<(), pixels::Error> {
                 pixels.resize_buffer(ls.width, ls.height).unwrap();
                 window.set_inner_size(ps);
                 state.resize(ls.width, ls.height);
+                state.data_mut().width = ls.width;
 
                 window.request_redraw();
             }

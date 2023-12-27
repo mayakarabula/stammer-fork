@@ -13,6 +13,17 @@ pub mod wrapped_text;
 type UpdateFn<D> = fn(&mut Element<D>, &D);
 
 #[derive(Debug, Default, Clone, Copy)]
+pub enum SizingStrategy {
+    #[default]
+    /// Just do whatever. The "normal" behavior.
+    Whatever,
+    /// Hey, please use as little room as possible please.
+    Chonker,
+    /// Pretty please fill out the room as much as you can!
+    Smollest,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
 /// # Note
 ///
 /// The [`width`] and [`height`] fields are the unconstrained dimensions. These may fall outside of
@@ -20,8 +31,9 @@ type UpdateFn<D> = fn(&mut Element<D>, &D);
 /// [`Element::overall_size`] to get the actual sizes constrained by the `min` and `max`
 /// properties.
 pub struct Size {
-    width: u32,
-    height: u32,
+    pub strategy: SizingStrategy,
+    baked_width: u32,
+    baked_height: u32,
     pub maxwidth: Option<u32>,
     pub maxheight: Option<u32>,
     pub minwidth: Option<u32>,
@@ -34,12 +46,32 @@ pub struct Dimensions {
     pub height: u32,
 }
 
+type Pad = u32;
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Padding {
-    pub top: u32,
-    pub bottom: u32,
-    pub left: u32,
-    pub right: u32,
+    pub top: Pad,
+    pub bottom: Pad,
+    pub left: Pad,
+    pub right: Pad,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Flex {
+    pub top: bool,
+    pub bottom: bool,
+    pub left: bool,
+    pub right: bool,
+}
+
+impl Flex {
+    fn vertical_flexes(&self) -> usize {
+        self.top as usize + self.bottom as usize
+    }
+
+    fn horizontal_flexes(&self) -> usize {
+        self.left as usize + self.right as usize
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -71,6 +103,7 @@ impl Style {
 pub struct Element<D> {
     pub size: Size,
     pub padding: Padding,
+    pub flex: Flex,
     pub style: Style,
     update: Option<UpdateFn<D>>,
     pub content: Content<D>,
@@ -88,6 +121,7 @@ impl<D> Element<D> {
         Self {
             size: Default::default(),
             padding: Default::default(),
+            flex: Default::default(),
             style: Style::default_with_font(font),
             update,
             content,
@@ -137,24 +171,51 @@ impl<D> Element<D> {
         self
     }
 
+    /* strategy */
+    pub fn with_strategy(mut self, strategy: SizingStrategy) -> Self {
+        self.size.strategy = strategy;
+        self
+    }
+
     /* padding */
-    pub fn with_padding_top(mut self, padding: u32) -> Self {
+    pub fn with_padding_top(mut self, padding: Pad) -> Self {
         self.padding.top = padding;
         self
     }
 
-    pub fn with_padding_bottom(mut self, padding: u32) -> Self {
+    pub fn with_padding_bottom(mut self, padding: Pad) -> Self {
         self.padding.bottom = padding;
         self
     }
 
-    pub fn with_padding_left(mut self, padding: u32) -> Self {
+    pub fn with_padding_left(mut self, padding: Pad) -> Self {
         self.padding.left = padding;
         self
     }
 
-    pub fn with_padding_right(mut self, padding: u32) -> Self {
+    pub fn with_padding_right(mut self, padding: Pad) -> Self {
         self.padding.right = padding;
+        self
+    }
+
+    /* flex */
+    pub fn with_flex_top(mut self, flex: bool) -> Self {
+        self.flex.top = flex;
+        self
+    }
+
+    pub fn with_flex_bottom(mut self, flex: bool) -> Self {
+        self.flex.bottom = flex;
+        self
+    }
+
+    pub fn with_flex_left(mut self, flex: bool) -> Self {
+        self.flex.left = flex;
+        self
+    }
+
+    pub fn with_flex_right(mut self, flex: bool) -> Self {
+        self.flex.right = flex;
         self
     }
 
@@ -188,19 +249,21 @@ impl<D> Element<D> {
     /// the `maxwidth`, and the `width` and `height` are subsequently calculated based on these
     /// wrapped lines.
     pub(crate) fn bake_size(&mut self) {
+        let width;
+        let height;
         match &mut self.content {
             Content::Text(text) => {
-                self.size.width = self.style.font.determine_width(text) as u32;
-                self.size.height = self.style.font.height() as u32;
+                width = self.style.font.determine_width(text) as u32;
+                height = self.style.font.height() as u32;
             }
             Content::Paragraph(wrapped) => {
                 wrapped.rewrap(self.size.maxwidth, &self.style.font);
-                self.size.width = wrapped
+                width = wrapped
                     .lines()
                     .map(|line| self.style.font.determine_width(line) as u32)
                     .max()
                     .unwrap_or_default();
-                self.size.height = (self.style.font.height() * wrapped.lines_count()) as u32;
+                height = (self.style.font.height() * wrapped.lines_count()) as u32;
             }
             Content::Row(children) | Content::Stack(children) => {
                 // TODO: See whether this collect alloc can be eliminated. Perhaps unzip?
@@ -215,15 +278,32 @@ impl<D> Element<D> {
                 let heights = sizes.iter().map(|size| size.height);
                 match self.content {
                     Content::Row(_) => {
-                        self.size.width = widths.sum();
-                        self.size.height = heights.max().unwrap_or_default();
+                        width = widths.sum();
+                        height = heights.max().unwrap_or_default();
                     }
                     Content::Stack(_) => {
-                        self.size.height = heights.sum();
-                        self.size.width = widths.max().unwrap_or_default();
+                        height = heights.sum();
+                        width = widths.max().unwrap_or_default();
                     }
                     _ => unreachable!(),
                 }
+            }
+        }
+
+        match self.size.strategy {
+            SizingStrategy::Whatever => {
+                self.size.baked_width = width;
+                self.size.baked_height = height;
+            }
+            SizingStrategy::Chonker => {
+                self.size.baked_width = self.size.maxwidth.unwrap_or_default().max(width);
+                self.size.baked_height = self.size.maxheight.unwrap_or_default().max(height);
+            }
+            SizingStrategy::Smollest => {
+                // Ah okay wow just realized what the problem is while I was doing something else.
+                // Wait no I was wrong.
+                self.size.baked_width = self.size.minwidth.unwrap_or(width).min(width);
+                self.size.baked_height = self.size.minheight.unwrap_or(height).min(height);
             }
         }
     }
@@ -253,16 +333,16 @@ impl<D> Element<D> {
     pub fn fill_size(&self) -> Dimensions {
         let size = self.size();
         let width = match (size.minwidth, size.maxwidth) {
-            (None, None) => size.width,
-            (None, Some(maxwidth)) => size.width.min(maxwidth),
-            (Some(minwidth), None) => size.width.max(minwidth),
-            (Some(minwidth), Some(maxwidth)) => size.width.clamp(minwidth, maxwidth),
+            (None, None) => size.baked_width,
+            (None, Some(maxwidth)) => size.baked_width.min(maxwidth),
+            (Some(minwidth), None) => size.baked_width.max(minwidth),
+            (Some(minwidth), Some(maxwidth)) => size.baked_width.clamp(minwidth, maxwidth),
         };
         let height = match (size.minheight, size.maxheight) {
-            (None, None) => size.height,
-            (None, Some(maxheight)) => size.height.min(maxheight),
-            (Some(minheight), None) => size.height.max(minheight),
-            (Some(minheight), Some(maxheight)) => size.height.clamp(minheight, maxheight),
+            (None, None) => size.baked_height,
+            (None, Some(maxheight)) => size.baked_height.min(maxheight),
+            (Some(minheight), None) => size.baked_height.max(minheight),
+            (Some(minheight), Some(maxheight)) => size.baked_height.clamp(minheight, maxheight),
         };
         Dimensions { width, height }
     }
@@ -271,13 +351,13 @@ impl<D> Element<D> {
     pub fn min_fill_size(&self) -> Dimensions {
         let size = self.size();
         let width = match (size.minwidth, size.maxwidth) {
-            (None, None) => size.width,
-            (None, Some(maxwidth)) => size.width.min(maxwidth),
+            (None, None) => size.baked_width,
+            (None, Some(maxwidth)) => size.baked_width.min(maxwidth),
             (Some(minwidth), _) => minwidth,
         };
         let height = match (size.minheight, size.maxheight) {
-            (None, None) => size.height,
-            (None, Some(maxheight)) => size.height.min(maxheight),
+            (None, None) => size.baked_height,
+            (None, Some(maxheight)) => size.baked_height.min(maxheight),
             (Some(minheight), _) => minheight,
         };
         Dimensions { width, height }
@@ -286,46 +366,38 @@ impl<D> Element<D> {
     pub fn max_fill_size(&self) -> Dimensions {
         let size = self.size();
         let width = match (size.minwidth, size.maxwidth) {
-            (None, None) => size.width,
-            (Some(minwidth), None) => size.width.max(minwidth),
+            (None, None) => size.baked_width,
+            (Some(minwidth), None) => size.baked_width.max(minwidth),
             (_, Some(maxwidth)) => maxwidth,
         };
         let height = match (size.minheight, size.maxheight) {
-            (None, None) => size.height,
-            (Some(minheight), None) => size.height.max(minheight),
+            (None, None) => size.baked_height,
+            (Some(minheight), None) => size.baked_height.max(minheight),
             (_, Some(maxheight)) => maxheight,
         };
         Dimensions { width, height }
     }
 
     /* with padding */
-    fn include_padding(&self, mut fillsize: Dimensions) -> Dimensions {
-        fillsize.width += self.padding.left + self.padding.right;
-        fillsize.height += self.padding.top + self.padding.bottom;
+    fn include_padding(mut fillsize: Dimensions, padding: Padding) -> Dimensions {
+        fillsize.width += padding.left + padding.right;
+        fillsize.height += padding.top + padding.bottom;
         fillsize
     }
 
     pub fn overall_size(&self) -> Dimensions {
-        self.include_padding(self.fill_size())
-    }
-
-    pub fn min_overall_size(&self) -> Dimensions {
-        self.include_padding(self.min_fill_size())
-    }
-
-    pub fn max_overall_size(&self) -> Dimensions {
-        self.include_padding(self.max_fill_size())
+        Self::include_padding(self.fill_size(), self.padding)
     }
 }
 
 impl<D> DrawBlock for Element<D> {
     fn block(&self) -> Block {
         let Dimensions { width, height } = self.fill_size();
-        let mut block = Block::new(width as usize, height as usize, self.style.background);
+        let mut inner_block = Block::new(width as usize, height as usize, self.style.background);
 
         match &self.content {
             Content::Text(text) => draw_text(
-                &mut block,
+                &mut inner_block,
                 text,
                 Alignment::default(), // TODO: Give Text an alignment field.
                 &self.style.font,
@@ -349,36 +421,109 @@ impl<D> DrawBlock for Element<D> {
                         self.style.background,
                     );
                     let line_block_height = line_block.height;
-                    block.paint(line_block, 0, y);
+                    inner_block.paint(line_block, 0, y);
                     y += line_block_height; // FIXME
                     if y > height as usize {
                         break;
                     }
                 }
             }
-            Content::Row(row) => {
+            Content::Row(children) => {
+                let element_size = self.overall_size();
+                let children_width: u32 = children
+                    .iter()
+                    .map(|child| child.overall_size().width)
+                    .sum();
+                let children_height: u32 = children
+                    .iter()
+                    .map(|child| child.overall_size().height)
+                    .max()
+                    .unwrap_or_default();
+                // TODO: There's a crash here for some supposedly valid values of minwidth.
+                assert!(element_size.width >= children_width);
+                assert!(element_size.height >= children_height);
+                let flex_room_hor = element_size.width - children_width;
+                let flex_room_ver = element_size.height - children_height;
+                let flexes_hor: u32 = children
+                    .iter()
+                    .map(|child| child.flex.horizontal_flexes() as u32)
+                    .sum();
+                let flexes_ver: u32 = children
+                    .iter()
+                    .map(|child| child.flex.vertical_flexes() as u32)
+                    .sum();
+                let room_per_flex_hor = flex_room_hor.checked_div(flexes_hor).unwrap_or_default();
+                let room_per_flex_ver = flex_room_ver.checked_div(flexes_ver).unwrap_or_default();
+
                 let mut x = 0;
-                for element in row {
-                    x += element.padding.left;
-                    let row_block = element.block();
-                    debug_assert_eq!(element.fill_size().width as usize, row_block.width);
-                    block.paint(row_block, x as usize, 0);
-                    x += element.fill_size().width + element.padding.right;
+                for child in children {
+                    if child.flex.left {
+                        x += room_per_flex_hor
+                    }
+                    inner_block.paint(
+                        child.block(),
+                        x as usize,
+                        child.flex.top as usize * room_per_flex_ver as usize,
+                    );
+                    if child.flex.right {
+                        x += room_per_flex_hor
+                    }
+                    x += child.overall_size().width;
                 }
             }
-            Content::Stack(stack) => {
+            Content::Stack(children) => {
+                let element_size = self.overall_size();
+                let children_width: u32 = children
+                    .iter()
+                    .map(|child| child.overall_size().width)
+                    .max()
+                    .unwrap_or_default();
+                let children_height: u32 = children
+                    .iter()
+                    .map(|child| child.overall_size().height)
+                    .sum();
+                // TODO: There's a crash here for some supposedly valid values of minwidth.
+                assert!(element_size.width >= children_width);
+                assert!(element_size.height >= children_height);
+                let flex_room_hor = element_size.width - children_width;
+                let flex_room_ver = element_size.height - children_height;
+                let flexes_hor: u32 = children
+                    .iter()
+                    .map(|child| child.flex.horizontal_flexes() as u32)
+                    .sum();
+                let flexes_ver: u32 = children
+                    .iter()
+                    .map(|child| child.flex.vertical_flexes() as u32)
+                    .sum();
+                let room_per_flex_hor = flex_room_hor.checked_div(flexes_hor).unwrap_or_default();
+                let room_per_flex_ver = flex_room_ver.checked_div(flexes_ver).unwrap_or_default();
+
                 let mut y = 0;
-                for element in stack {
-                    y += element.padding.top;
-                    let stack_block = element.block();
-                    debug_assert_eq!(element.fill_size().height as usize, stack_block.height);
-                    block.paint(stack_block, 0, y as usize);
-                    y += element.fill_size().height + element.padding.bottom;
+                for child in children {
+                    if child.flex.top {
+                        y += room_per_flex_ver
+                    }
+                    inner_block.paint(
+                        child.block(),
+                        child.flex.left as usize * room_per_flex_hor as usize,
+                        y as usize,
+                    );
+                    if child.flex.bottom {
+                        y += room_per_flex_ver
+                    }
+                    y += child.overall_size().height;
                 }
             }
         }
 
-        block
+        let Dimensions { width, height } = self.overall_size();
+        let mut padded_block = Block::new(width as usize, height as usize, self.style.background);
+        padded_block.paint(
+            inner_block,
+            self.padding.left as usize,
+            self.padding.top as usize,
+        );
+        padded_block
     }
 }
 
@@ -415,7 +560,7 @@ fn draw_text(
     if block.width == 0 || scrap_width == 0 {
         return; // Nothing to even draw, here. Why expend the energy?
     }
-    let mut scrap = Block::new(scrap_width, block.height, background);
+    let mut scrap = Block::new(scrap_width, font.height(), background);
     let glyphs = text.chars().flat_map(|ch| font.glyph(ch));
     let mut x0 = 0;
     for glyph in glyphs {
