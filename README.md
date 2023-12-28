@@ -8,6 +8,8 @@ Do not use this.
 
 [a little video of scrolling in examples/reader.rs](https://hachyderm.io/@ma3ke/111632185354245376)
 
+[the new flex mechanism from `examples/minimal.rs` in a video](https://hachyderm.io/@ma3ke/111654800311635410)
+
 This project started as a way of breaking out the ui/rendering code for [_tid_](https://git.sr.ht/~ma3ke/tid/) and [_gemininini_](https://github.com/mayakarabula/gemininini/).
 In the future, it _may_ be used as their ui backend. Or not. We'll see.
 
