@@ -23,7 +23,7 @@ pub struct Panel<D> {
     pub background: Pixel,
 
     data: D,
-    elements: Element<D>,
+    pub elements: Element<D>,
 }
 
 impl<D> Panel<D> {
