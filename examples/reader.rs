@@ -44,7 +44,7 @@ fn load_font(path: &str) -> std::io::Result<Font> {
 fn setup_elements(font: Rc<Font>) -> Element<Data> {
     fn display_address(element: &mut Element<Data>, data: &Data) {
         // TODO: This whole practice is a mess and is horrible and oh no.
-        let Content::Text(text) = &mut element.content else {
+        let Content::Text(text, _) = &mut element.content else {
             unreachable!()
         };
         text.clear();
@@ -62,7 +62,7 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
 
     fn display_text(element: &mut Element<Data>, data: &Data) {
         // TODO: This whole practice is a mess and is horrible and oh no.
-        let Content::Paragraph(text) = &mut element.content else {
+        let Content::Paragraph(text, _) = &mut element.content else {
             unreachable!()
         };
         *text = WrappedText::new(data.text.clone(), data.width, &element.style.font)
@@ -70,7 +70,7 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
 
     fn display_mode(element: &mut Element<Data>, data: &Data) {
         // TODO: This whole practice is a mess and is horrible and oh no.
-        let Content::Text(text) = &mut element.content else {
+        let Content::Text(text, _) = &mut element.content else {
             unreachable!()
         };
         text.clear();
@@ -82,7 +82,11 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
         Element::still(
             Rc::clone(&font),
             Stack(vec![
-                Element::dynamic(display_address, Rc::clone(&font), Text("---".to_string())),
+                Element::dynamic(
+                    display_address,
+                    Rc::clone(&font),
+                    Text("---".to_string(), Alignment::Left),
+                ),
                 // FIXME: Implement ability to scroll containers for this to work.
                 // Element::dynamic(
                 //     update_scroll,Rc::clone(&font),
@@ -94,7 +98,11 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
                 //         0,
                 //     ),
                 // ),
-                Element::dynamic(display_mode, Rc::clone(&font), Text("---".to_string())),
+                Element::dynamic(
+                    display_mode,
+                    Rc::clone(&font),
+                    Text("---".to_string(), Alignment::Left),
+                ),
             ]),
         )
     }

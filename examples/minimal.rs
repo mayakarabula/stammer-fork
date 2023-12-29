@@ -5,7 +5,7 @@ use std::rc::Rc;
 use fleck::Font;
 use pixels::wgpu::BlendState;
 use pixels::{PixelsBuilder, SurfaceTexture};
-use stammer::elements::{Content, Element, SizingStrategy};
+use stammer::elements::{Alignment, Content, Element, SizingStrategy};
 use stammer::Panel;
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::Event;
@@ -55,14 +55,21 @@ fn setup_elements(font: Rc<Font>, cute_font: Rc<Font>) -> Element<Data> {
                 resize_width,
                 Rc::clone(&font),
                 Row(vec![
-                    Element::still(Rc::clone(&font), Text("top left".to_string()))
-                        .with_padding_top(10)
-                        .with_padding_right(20)
-                        .with_background([0xff, 0xaa, 0xaa, 0xff])
-                        .with_flex_right(true),
-                    Element::still(Rc::clone(&font), Text("top right".to_string()))
-                        .with_minheight(100)
-                        .with_background([0xff, 0xaa, 0xff, 0xff]),
+                    Element::still(
+                        Rc::clone(&font),
+                        Text("top left".to_string(), Alignment::Right),
+                    )
+                    .with_padding_top(10)
+                    .with_padding_right(20)
+                    .with_minwidth(150)
+                    .with_background([0xff, 0xaa, 0xaa, 0xff])
+                    .with_flex_right(true),
+                    Element::still(
+                        Rc::clone(&font),
+                        Text("top right".to_string(), Alignment::Right),
+                    )
+                    .with_minheight(100)
+                    .with_background([0xff, 0xaa, 0xff, 0xff]),
                 ]),
             )
             .with_strategy(SizingStrategy::Chonker),
@@ -71,7 +78,7 @@ fn setup_elements(font: Rc<Font>, cute_font: Rc<Font>) -> Element<Data> {
                 Rc::clone(&font),
                 Row(vec![Element::still(
                     Rc::clone(&cute_font),
-                    Text("weird flex but ok".to_string()),
+                    Text("weird flex but ok".to_string(), Alignment::Right),
                 )
                 .with_flex_left(true)
                 .with_flex_right(true)
@@ -84,13 +91,20 @@ fn setup_elements(font: Rc<Font>, cute_font: Rc<Font>) -> Element<Data> {
                 resize_width,
                 Rc::clone(&font),
                 Row(vec![
-                    Element::still(Rc::clone(&font), Text("bottom left".to_string()))
-                        .with_padding_left(30)
-                        .with_padding_right(40)
-                        .with_background([0xaa, 0xff, 0xaa, 0xff])
-                        .with_flex_right(true),
-                    Element::still(Rc::clone(&font), Text("bottom right".to_string()))
-                        .with_background([0xaa, 0xaa, 0xff, 0xff]),
+                    Element::still(
+                        Rc::clone(&font),
+                        Text("bottom left".to_string(), Alignment::Left),
+                    )
+                    .with_padding_left(30)
+                    .with_padding_right(40)
+                    .with_background([0xaa, 0xff, 0xaa, 0xff])
+                    .with_flex_right(true),
+                    Element::still(
+                        Rc::clone(&font),
+                        Text("bottom right".to_string(), Alignment::Center),
+                    )
+                    .with_minwidth(200)
+                    .with_background([0xaa, 0xaa, 0xff, 0xff]),
                 ]),
             )
             .with_strategy(SizingStrategy::Chonker),

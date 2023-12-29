@@ -6,7 +6,7 @@ use std::rc::Rc;
 use fleck::Font;
 use pixels::wgpu::BlendState;
 use pixels::{PixelsBuilder, SurfaceTexture};
-use stammer::elements::{Content, Element};
+use stammer::elements::{Alignment, Content, Element};
 use stammer::elements::{Graph, SizingStrategy};
 use stammer::Panel;
 use winit::dpi::{LogicalSize, PhysicalSize};
@@ -75,7 +75,7 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
 
     fn display_step(element: &mut Element<Data>, data: &Data) {
         // TODO: This whole practice is a mess and is horrible and oh no.
-        let Content::Text(text) = &mut element.content else {
+        let Content::Text(text, _) = &mut element.content else {
             unreachable!()
         };
         text.clear();
@@ -90,10 +90,17 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
                 Element::still(
                     Rc::clone(&font),
                     Row(vec![
-                        Element::still(Rc::clone(&font), Text("measurement interval:".to_string()))
-                            .with_padding_right(16)
-                            .with_flex_right(true),
-                        Element::dynamic(display_step, Rc::clone(&font), Text("---".to_string())),
+                        Element::still(
+                            Rc::clone(&font),
+                            Text("measurement interval:".to_string(), Alignment::Left),
+                        )
+                        .with_padding_right(16)
+                        .with_flex_right(true),
+                        Element::dynamic(
+                            display_step,
+                            Rc::clone(&font),
+                            Text("---".to_string(), Alignment::Center),
+                        ),
                     ]),
                 )
                 .with_minwidth(400)
@@ -107,12 +114,12 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
                             Stack(vec![
                                 Element::still(
                                     Rc::clone(&font),
-                                    Text("deflection coil phase".to_string()),
+                                    Text("deflection coil phase".to_string(), Alignment::Left),
                                 )
                                 .with_padding_bottom(16),
                                 Element::still(
                                     Rc::clone(&font),
-                                    Text("tri-axial wave converter".to_string()),
+                                    Text("tri-axial wave converter".to_string(), Alignment::Left),
                                 ),
                             ]),
                         )
@@ -122,12 +129,12 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
                             Stack(vec![
                                 Element::still(
                                     Rc::clone(&font),
-                                    Text("TODO: Graph placeholder.".to_string()),
+                                    Text("TODO: Graph placeholder.".to_string(), Alignment::Right),
                                 )
                                 .with_padding_bottom(16),
                                 Element::still(
                                     Rc::clone(&font),
-                                    Text("TODO: Graph placeholder.".to_string()),
+                                    Text("TODO: Graph placeholder.".to_string(), Alignment::Right),
                                 ),
                                 // Element::dynamic(step_graph, Rc::clone(&font), Graph(sine)),
                                 // Element::dynamic(step_graph, Rc::clone(&font), Graph(triangle)),

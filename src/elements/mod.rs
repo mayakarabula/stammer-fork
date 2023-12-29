@@ -110,8 +110,8 @@ pub struct Element<D> {
 }
 
 pub enum Content<D> {
-    Text(String),
-    Paragraph(WrappedText),
+    Text(String, Alignment),
+    Paragraph(WrappedText, Alignment),
     Row(Vec<Element<D>>),
     Stack(Vec<Element<D>>),
 }
@@ -252,11 +252,11 @@ impl<D> Element<D> {
         let width;
         let height;
         match &mut self.content {
-            Content::Text(text) => {
+            Content::Text(text, _) => {
                 width = self.style.font.determine_width(text) as u32;
                 height = self.style.font.height() as u32;
             }
-            Content::Paragraph(wrapped) => {
+            Content::Paragraph(wrapped, _) => {
                 wrapped.rewrap(self.size.maxwidth, &self.style.font);
                 width = wrapped
                     .lines()
@@ -396,15 +396,15 @@ impl<D> DrawBlock for Element<D> {
         let mut inner_block = Block::new(width as usize, height as usize, self.style.background);
 
         match &self.content {
-            Content::Text(text) => draw_text(
+            Content::Text(text, alignment) => draw_text(
                 &mut inner_block,
                 text,
-                Alignment::default(), // TODO: Give Text an alignment field.
+                *alignment,
                 &self.style.font,
                 self.style.foreground,
                 self.style.background,
             ),
-            Content::Paragraph(wrapped) => {
+            Content::Paragraph(wrapped, alignment) => {
                 let mut y = 0;
                 for line in wrapped.lines() {
                     let mut line_block = Block::new(
@@ -415,7 +415,7 @@ impl<D> DrawBlock for Element<D> {
                     draw_text(
                         &mut line_block,
                         line,
-                        Alignment::default(), // TODO: Give Paragraph an alignment field.
+                        *alignment,
                         &self.style.font,
                         self.style.foreground,
                         self.style.background,
