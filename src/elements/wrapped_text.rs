@@ -21,6 +21,7 @@ impl WrappedText {
         // TODO: Equal starts optimization.
 
         let Self(text, breaklist) = self;
+        breaklist.clear();
         let mut scrapwidth = 0u32;
         let mut wordwidth = 0u32;
         // FIXME: There may be a bug with a very long unbroken first line because we set it to 0
@@ -207,5 +208,18 @@ machine.
         let wrapped = WrappedText::new(lorem, 300, &FONT);
         assert_eq!(wrapped.lines_count(), wrapped.lines().count());
         assert_eq!(wrapped.lines_count(), 17);
+    }
+
+    #[test]
+    fn rewrap() {
+        let lorem = include_str!("../../examples/lorem.txt").to_string();
+        let wrapped = WrappedText::new(lorem, 690, &FONT);
+        let mut rewrapped = wrapped.clone();
+        rewrapped.rewrap(Some(420), &FONT);
+        rewrapped.rewrap(Some(690), &FONT);
+        assert_eq!(
+            wrapped.lines().collect::<Vec<_>>(),
+            rewrapped.lines().collect::<Vec<_>>()
+        );
     }
 }
