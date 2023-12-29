@@ -248,7 +248,7 @@ impl<D> Element<D> {
     /// In case of an `Element` with content [`Content::Paragraph`], the inner text is wrapped to
     /// the `maxwidth`, and the `width` and `height` are subsequently calculated based on these
     /// wrapped lines.
-    pub(crate) fn bake_size(&mut self) {
+    pub(crate) fn bake_size(&mut self, maxwidth_hint: Option<u32>) {
         let width;
         let height;
         match &mut self.content {
@@ -257,7 +257,7 @@ impl<D> Element<D> {
                 height = self.style.font.height() as u32;
             }
             Content::Paragraph(wrapped, _) => {
-                wrapped.rewrap(self.size.maxwidth, &self.style.font);
+                wrapped.rewrap(self.size.maxwidth.or(maxwidth_hint), &self.style.font);
                 width = wrapped
                     .lines()
                     .map(|line| self.style.font.determine_width(line) as u32)
@@ -270,7 +270,7 @@ impl<D> Element<D> {
                 let sizes: Vec<_> = children
                     .iter_mut()
                     .map(|child| {
-                        child.bake_size();
+                        child.bake_size(self.size.maxwidth);
                         child.overall_size()
                     })
                     .collect();

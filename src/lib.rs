@@ -28,7 +28,7 @@ pub struct Panel<D> {
 
 impl<D> Panel<D> {
     pub fn new(mut elements: Element<D>, foreground: Pixel, background: Pixel, data: D) -> Self {
-        elements.bake_size(); // We calculate the sizes in order to give the first estimate.
+        elements.bake_size(None); // We calculate the sizes in order to give the first estimate.
         let Dimensions { width, height } = elements.overall_size();
         Self {
             width,
@@ -48,7 +48,7 @@ impl<D> Panel<D> {
     /// Update all elements with the internal `data`.
     pub fn update(&mut self) {
         self.elements.update(&self.data);
-        self.elements.bake_size();
+        self.elements.bake_size(Some(self.width));
     }
 
     /// Draw the [`Raam`] onto a pixel buffer.
