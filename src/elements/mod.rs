@@ -439,11 +439,8 @@ impl<D> DrawBlock for Element<D> {
                     .map(|child| child.overall_size().height)
                     .max()
                     .unwrap_or_default();
-                // TODO: There's a crash here for some supposedly valid values of minwidth.
-                assert!(element_size.width >= children_width);
-                assert!(element_size.height >= children_height);
-                let flex_room_hor = element_size.width - children_width;
-                let flex_room_ver = element_size.height - children_height;
+                let flex_room_hor = element_size.width.saturating_sub(children_width);
+                let flex_room_ver = element_size.height.saturating_sub(children_height);
                 let flexes_hor: u32 = children
                     .iter()
                     .map(|child| child.flex.horizontal_flexes() as u32)
@@ -482,11 +479,8 @@ impl<D> DrawBlock for Element<D> {
                     .iter()
                     .map(|child| child.overall_size().height)
                     .sum();
-                // TODO: There's a crash here for some supposedly valid values of minwidth.
-                assert!(element_size.width >= children_width);
-                assert!(element_size.height >= children_height);
-                let flex_room_hor = element_size.width - children_width;
-                let flex_room_ver = element_size.height - children_height;
+                let flex_room_hor = element_size.width.saturating_sub(children_width);
+                let flex_room_ver = element_size.height.saturating_sub(children_height);
                 let flexes_hor: u32 = children
                     .iter()
                     .map(|child| child.flex.horizontal_flexes() as u32)
