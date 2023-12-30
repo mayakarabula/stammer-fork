@@ -435,7 +435,7 @@ impl<D> Element<D> {
 impl<D> DrawBlock for Element<D> {
     fn block(&self) -> Block {
         let Dimensions { width, height } = self.fill_size();
-        let mut inner_block = Block::new(width as usize, height as usize, self.style.background);
+        let mut inner_block = Block::new(width, height, self.style.background);
         match &self.content {
             Content::Text(text, alignment) => draw_text(
                 &mut inner_block,
@@ -449,8 +449,8 @@ impl<D> DrawBlock for Element<D> {
                 let mut y = 0;
                 for line in wrapped.lines() {
                     let mut line_block = Block::new(
-                        width as usize,
-                        self.style.font.height(),
+                        width,
+                        self.style.font.height() as u32,
                         self.style.background,
                     );
                     draw_text(
@@ -464,7 +464,7 @@ impl<D> DrawBlock for Element<D> {
                     let line_block_height = line_block.height;
                     inner_block.paint(line_block, 0, y);
                     y += line_block_height; // FIXME
-                    if y > height as usize {
+                    if y > height {
                         break;
                     }
                 }
@@ -476,11 +476,7 @@ impl<D> DrawBlock for Element<D> {
                     if child.flex.left {
                         x += room_per_flex_hor
                     }
-                    inner_block.paint(
-                        child.block(),
-                        x as usize,
-                        child.flex.top as usize * room_per_flex_ver as usize,
-                    );
+                    inner_block.paint(child.block(), x, child.flex.top as u32 * room_per_flex_ver);
                     if child.flex.right {
                         x += room_per_flex_hor
                     }
@@ -494,11 +490,7 @@ impl<D> DrawBlock for Element<D> {
                     if child.flex.top {
                         y += room_per_flex_ver
                     }
-                    inner_block.paint(
-                        child.block(),
-                        child.flex.left as usize * room_per_flex_hor as usize,
-                        y as usize,
-                    );
+                    inner_block.paint(child.block(), child.flex.left as u32 * room_per_flex_hor, y);
                     if child.flex.bottom {
                         y += room_per_flex_ver
                     }
@@ -508,12 +500,8 @@ impl<D> DrawBlock for Element<D> {
         }
 
         let Dimensions { width, height } = self.overall_size();
-        let mut padded_block = Block::new(width as usize, height as usize, self.style.background);
-        padded_block.paint(
-            inner_block,
-            self.padding.left as usize,
-            self.padding.top as usize,
-        );
+        let mut padded_block = Block::new(width, height, self.style.background);
+        padded_block.paint(inner_block, self.padding.left, self.padding.top);
         padded_block
     }
 }
@@ -551,7 +539,7 @@ fn draw_text(
     if block.width == 0 || scrap_width == 0 {
         return; // Nothing to even draw, here. Why expend the energy?
     }
-    let mut scrap = Block::new(scrap_width, font.height(), background);
+    let mut scrap = Block::new(scrap_width as u32, font.height() as u32, background);
     let glyphs = text.chars().flat_map(|ch| font.glyph(ch));
     let mut x0 = 0;
     for glyph in glyphs {
@@ -561,7 +549,8 @@ fn draw_text(
                 let x = x0 + xg;
                 // TODO: This may be more efficient than what I did in Graph. May be
                 // worth investigating which is better.
-                scrap.buf[y * scrap.width + x] = if cell { foreground } else { background };
+                scrap.buf[y * scrap.width as usize + x] =
+                    if cell { foreground } else { background };
             }
         }
         x0 += glyph_width;
@@ -571,7 +560,7 @@ fn draw_text(
     // that is confusing, since it obscures a more elegant insight.
     match alignment {
         Alignment::Left => {
-            let end = usize::min(block.width, scrap.width);
+            let end = block.width.min(scrap.width) as usize;
             block
                 .rows_mut()
                 .zip(scrap.rows())
@@ -583,7 +572,7 @@ fn draw_text(
         // nicely.
         // TODO: Decide on the actually correct behavior for Alignment::Center in this case.
         Alignment::Center if scrap.width >= block.width => {
-            let end = usize::min(block.width, scrap.width);
+            let end = block.width.min(scrap.width) as usize;
             block
                 .rows_mut()
                 .zip(scrap.rows())
@@ -593,17 +582,17 @@ fn draw_text(
         }
         Alignment::Center => {
             let remainder = block.width - scrap.width;
-            let start = remainder / 2;
+            let start = remainder as usize / 2;
             block
                 .rows_mut()
                 .zip(scrap.rows())
                 .for_each(|(row, scrap_row)| {
-                    row[start..start + scrap.width].copy_from_slice(scrap_row);
+                    row[start..start + scrap.width as usize].copy_from_slice(scrap_row);
                 })
         }
         Alignment::Right => {
-            let rstart = block.width.saturating_sub(scrap.width);
-            let sstart = scrap.width.saturating_sub(block.width);
+            let rstart = block.width.saturating_sub(scrap.width) as usize;
+            let sstart = scrap.width.saturating_sub(block.width) as usize;
             block
                 .rows_mut()
                 .zip(scrap.rows())

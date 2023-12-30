@@ -58,7 +58,7 @@ impl<D> Panel<D> {
     ///
     /// See also: [`Pixel`].
     pub fn draw(&self, pixels: &mut [u8]) {
-        let mut block = Block::new(self.width as usize, self.height as usize, self.background);
+        let mut block = Block::new(self.width, self.height, self.background);
 
         // Draw onto our block.
         block.paint(self.elements.block(), 0, 0);
