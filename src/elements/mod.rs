@@ -40,10 +40,16 @@ pub struct Size {
     pub minheight: Option<u32>,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Dimensions {
     pub width: u32,
     pub height: u32,
+}
+
+impl Dimensions {
+    pub fn new(width: u32, height: u32) -> Self {
+        Self { width, height }
+    }
 }
 
 type Pad = u32;
