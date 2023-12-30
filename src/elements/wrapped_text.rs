@@ -1,6 +1,15 @@
 use fleck::Font;
 
-/// A wrapper for a [`String`] where its contents are guaranteed to be wrapped at construction.
+/// A wrapper for a [`String`] where its contents are guaranteed to be wrapped at time of use.
+///
+/// To iterate over the wrapped lines, use [`WrappedText::lines`]. A [`String`] with baked newlines
+/// is returned by [`WrappedText::wrapped`].
+///
+/// # Note
+///
+/// No actual wrapping of the internal string takes place at time of [creation](WrappedText::new)
+/// or when [rewrapped](WrappedText::rewrap). In fact, the internal string is not mutate over the
+/// lifetime of [`WrappedText`].
 #[derive(Debug, Default, Clone)]
 pub struct WrappedText(String, Vec<usize>);
 
@@ -25,7 +34,9 @@ impl WrappedText {
         ret
     }
 
-
+    /// Rewrap the [`WrappedText`] to the desired width.
+    ///
+    /// If `None` is passed as the `maxwidth`, the lines are not wrapped.
     pub fn rewrap(&mut self, maxwidth: Option<u32>, font: &Font) {
         // TODO: Do this optimization that I had this note for:
         // > TODO: I don't know whether this makes any sense. Never measured it. I like it because
@@ -78,6 +89,7 @@ impl WrappedText {
         breaklist.push(text.len());
     }
 
+    /// Returns an iterator over the lines of this [`WrappedText`].
     pub fn lines(&self) -> impl Iterator<Item = &str> {
         let mut runner = 0;
         self.1.iter().map(move |&breakpoint| {
