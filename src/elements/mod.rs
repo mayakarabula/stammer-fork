@@ -461,9 +461,8 @@ impl<D> DrawBlock for Element<D> {
                         self.style.foreground,
                         self.style.background,
                     );
-                    let line_block_height = line_block.height;
-                    inner_block.paint(line_block, 0, y);
-                    y += line_block_height; // FIXME
+                    inner_block.paint(&line_block, 0, y);
+                    y += line_block.height;
                     if y > height {
                         break;
                     }
@@ -476,7 +475,7 @@ impl<D> DrawBlock for Element<D> {
                     if child.flex.left {
                         x += room_per_flex_hor
                     }
-                    inner_block.paint(child.block(), x, child.flex.top as u32 * room_per_flex_ver);
+                    inner_block.paint(&child.block(), x, child.flex.top as u32 * room_per_flex_ver);
                     if child.flex.right {
                         x += room_per_flex_hor
                     }
@@ -490,7 +489,11 @@ impl<D> DrawBlock for Element<D> {
                     if child.flex.top {
                         y += room_per_flex_ver
                     }
-                    inner_block.paint(child.block(), child.flex.left as u32 * room_per_flex_hor, y);
+                    inner_block.paint(
+                        &child.block(),
+                        child.flex.left as u32 * room_per_flex_hor,
+                        y,
+                    );
                     if child.flex.bottom {
                         y += room_per_flex_ver
                     }
@@ -501,7 +504,7 @@ impl<D> DrawBlock for Element<D> {
 
         let Dimensions { width, height } = self.overall_size();
         let mut padded_block = Block::new(width, height, self.style.background);
-        padded_block.paint(inner_block, self.padding.left, self.padding.top);
+        padded_block.paint(&inner_block, self.padding.left, self.padding.top);
         padded_block
     }
 }

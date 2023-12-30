@@ -61,7 +61,7 @@ impl<D> Panel<D> {
         let mut block = Block::new(self.width, self.height, self.background);
 
         // Draw onto our block.
-        block.paint(self.elements.block(), 0, 0);
+        block.paint(&self.elements.block(), 0, 0);
 
         // Draw the block onto the pixels.
         block.draw_onto_pixels(pixels);

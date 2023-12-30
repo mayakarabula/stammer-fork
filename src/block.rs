@@ -54,7 +54,7 @@ impl Block {
     ///
     /// In case `start_x` is greater than the width of the `Block` that is painted onto
     /// (`self.width`), this function will panic.
-    pub(crate) fn paint(&mut self, other: Self, start_x: u32, start_y: u32) {
+    pub(crate) fn paint(&mut self, other: &Self, start_x: u32, start_y: u32) {
         if other.width == 0 || self.width == 0 {
             return;
         }
