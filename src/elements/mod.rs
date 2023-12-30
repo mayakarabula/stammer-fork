@@ -388,13 +388,54 @@ impl<D> Element<D> {
     pub fn overall_size(&self) -> Dimensions {
         Self::include_padding(self.fill_size(), self.padding)
     }
+
+    /// Returns a tuple with the horizontal then vertical room per flex for `children`.
+    ///
+    /// # Panics
+    ///
+    /// Can only be called on an element with a [`Content::Row`] or [`Content::Stack`]. If it is
+    /// called on an [`Element`] with a different content kind, the function will panic.
+    fn room_per_flex(&self, children: &[Element<D>]) -> (u32, u32) {
+        let children_sizes = children.iter().map(|child| child.overall_size());
+        let (children_width, children_height) = match self.content {
+            Content::Row(_) => (
+                children_sizes.clone().map(|size| size.width).sum(),
+                children_sizes
+                    .map(|size| size.height)
+                    .max()
+                    .unwrap_or_default(),
+            ),
+            Content::Stack(_) => (
+                children_sizes
+                    .clone()
+                    .map(|size| size.width)
+                    .max()
+                    .unwrap_or_default(),
+                children_sizes.map(|size| size.height).sum(),
+            ),
+            _ => unimplemented!(
+                "this function can only produce meaningful results for Row and Stack Content"
+            ),
+        };
+        let flex_room_hor = self.overall_size().width.saturating_sub(children_width);
+        let flex_room_ver = self.overall_size().height.saturating_sub(children_height);
+        let flexes = children.iter().map(|child| child.flex);
+        let flexes_hor: u32 = flexes
+            .clone()
+            .map(|flex| flex.horizontal_flexes() as u32)
+            .sum();
+        let flexes_ver: u32 = flexes.map(|flex| flex.vertical_flexes() as u32).sum();
+        (
+            flex_room_hor.checked_div(flexes_hor).unwrap_or_default(),
+            flex_room_ver.checked_div(flexes_ver).unwrap_or_default(),
+        )
+    }
 }
 
 impl<D> DrawBlock for Element<D> {
     fn block(&self) -> Block {
         let Dimensions { width, height } = self.fill_size();
         let mut inner_block = Block::new(width as usize, height as usize, self.style.background);
-
         match &self.content {
             Content::Text(text, alignment) => draw_text(
                 &mut inner_block,
@@ -429,29 +470,7 @@ impl<D> DrawBlock for Element<D> {
                 }
             }
             Content::Row(children) => {
-                let element_size = self.overall_size();
-                let children_width: u32 = children
-                    .iter()
-                    .map(|child| child.overall_size().width)
-                    .sum();
-                let children_height: u32 = children
-                    .iter()
-                    .map(|child| child.overall_size().height)
-                    .max()
-                    .unwrap_or_default();
-                let flex_room_hor = element_size.width.saturating_sub(children_width);
-                let flex_room_ver = element_size.height.saturating_sub(children_height);
-                let flexes_hor: u32 = children
-                    .iter()
-                    .map(|child| child.flex.horizontal_flexes() as u32)
-                    .sum();
-                let flexes_ver: u32 = children
-                    .iter()
-                    .map(|child| child.flex.vertical_flexes() as u32)
-                    .sum();
-                let room_per_flex_hor = flex_room_hor.checked_div(flexes_hor).unwrap_or_default();
-                let room_per_flex_ver = flex_room_ver.checked_div(flexes_ver).unwrap_or_default();
-
+                let (room_per_flex_hor, room_per_flex_ver) = self.room_per_flex(children);
                 let mut x = 0;
                 for child in children {
                     if child.flex.left {
@@ -469,29 +488,7 @@ impl<D> DrawBlock for Element<D> {
                 }
             }
             Content::Stack(children) => {
-                let element_size = self.overall_size();
-                let children_width: u32 = children
-                    .iter()
-                    .map(|child| child.overall_size().width)
-                    .max()
-                    .unwrap_or_default();
-                let children_height: u32 = children
-                    .iter()
-                    .map(|child| child.overall_size().height)
-                    .sum();
-                let flex_room_hor = element_size.width.saturating_sub(children_width);
-                let flex_room_ver = element_size.height.saturating_sub(children_height);
-                let flexes_hor: u32 = children
-                    .iter()
-                    .map(|child| child.flex.horizontal_flexes() as u32)
-                    .sum();
-                let flexes_ver: u32 = children
-                    .iter()
-                    .map(|child| child.flex.vertical_flexes() as u32)
-                    .sum();
-                let room_per_flex_hor = flex_room_hor.checked_div(flexes_hor).unwrap_or_default();
-                let room_per_flex_ver = flex_room_ver.checked_div(flexes_ver).unwrap_or_default();
-
+                let (room_per_flex_hor, room_per_flex_ver) = self.room_per_flex(children);
                 let mut y = 0;
                 for child in children {
                     if child.flex.top {
