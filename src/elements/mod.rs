@@ -632,3 +632,109 @@ fn draw_text(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use fleck::Font;
+
+    use super::*;
+
+    type Data = ();
+
+    fn create_element() -> Element<Data> {
+        let font = Font::new(include_bytes!("../../cream12.uf2"));
+        Element::<Data>::still(
+            Rc::new(font),
+            Content::Text("Hello, world.".to_string(), Alignment::default()),
+        )
+    }
+
+    #[test]
+    fn fill_size() {
+        let mut elem = create_element();
+        elem.bake_size(None);
+
+        assert_eq!(elem.fill_size(), Dimensions::new(69, 16));
+    }
+
+    #[test]
+    fn min_fill_size() {
+        macro_rules! bake_and_compare {
+            ($elem:ident, $dim:expr) => {
+                $elem.bake_size(None);
+                assert_eq!($elem.min_fill_size(), $dim);
+            };
+        }
+
+        let mut elem = create_element();
+        bake_and_compare!(elem, Dimensions::new(69, 16));
+
+        elem = elem.with_minwidth(40).with_minheight(10);
+        bake_and_compare!(elem, Dimensions::new(40, 10));
+
+        elem = elem.with_maxwidth(40).with_maxheight(10);
+        bake_and_compare!(elem, Dimensions::new(40, 10));
+
+        elem = elem.with_maxwidth(300).with_maxheight(48);
+        bake_and_compare!(elem, Dimensions::new(40, 10));
+
+        elem = elem.with_minwidth(200).with_minheight(32);
+        bake_and_compare!(elem, Dimensions::new(200, 32));
+    }
+
+    #[test]
+    fn max_fill_size() {
+        macro_rules! bake_and_compare {
+            ($elem:ident, $dim:expr) => {
+                $elem.bake_size(None);
+                assert_eq!($elem.max_fill_size(), $dim);
+            };
+        }
+
+        let mut elem = create_element();
+        bake_and_compare!(elem, Dimensions::new(69, 16));
+
+        elem = elem.with_minwidth(40).with_minheight(10);
+        bake_and_compare!(elem, Dimensions::new(69, 16));
+
+        elem = elem.with_maxwidth(40).with_maxheight(10);
+        bake_and_compare!(elem, Dimensions::new(40, 10));
+
+        elem = elem.with_maxwidth(300).with_maxheight(48);
+        bake_and_compare!(elem, Dimensions::new(300, 48));
+
+        elem = elem.with_minwidth(200).with_minheight(32);
+        bake_and_compare!(elem, Dimensions::new(300, 48));
+    }
+
+    #[test]
+    fn zero_padding() {
+        let mut elem = create_element();
+        elem.bake_size(None);
+        assert_eq!(elem.overall_size(), Dimensions::new(69, 16));
+
+        elem = elem
+            .with_padding_top(0)
+            .with_padding_bottom(0)
+            .with_padding_left(0)
+            .with_padding_right(0);
+        elem.bake_size(None);
+        assert_eq!(elem.overall_size(), Dimensions::new(69, 16));
+        assert_eq!(elem.overall_size(), elem.fill_size(),);
+    }
+
+    #[test]
+    fn with_padding() {
+        let mut elem = create_element();
+        elem.bake_size(None);
+        assert_eq!(elem.overall_size(), Dimensions::new(69, 16));
+
+        elem = elem
+            .with_padding_top(12)
+            .with_padding_bottom(34)
+            .with_padding_left(56)
+            .with_padding_right(78);
+        elem.bake_size(None);
+        assert_eq!(elem.overall_size(), Dimensions::new(203, 62));
+    }
+}
