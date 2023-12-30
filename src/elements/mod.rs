@@ -255,6 +255,27 @@ impl<D> Element<D> {
     /// the `maxwidth`, and the `width` and `height` are subsequently calculated based on these
     /// wrapped lines.
     pub(crate) fn bake_size(&mut self, maxwidth_hint: Option<u32>) {
+        {
+            let Size {
+                minwidth,
+                maxwidth,
+                minheight,
+                maxheight,
+                ..
+            } = self.size();
+            if maxwidth.is_some() && minwidth.is_some() {
+                assert!(
+                    maxwidth >= minwidth,
+                    "minwidth ({minwidth:?}) cannot be greater than maxwidth ({maxwidth:?})"
+                );
+            }
+            if maxheight.is_some() && minheight.is_some() {
+                assert!(
+                    maxheight >= minheight,
+                    "minheight ({minheight:?}) cannot be greater than maxheight ({maxheight:?})"
+                );
+            }
+        }
         let width;
         let height;
         match &mut self.content {
