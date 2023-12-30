@@ -8,10 +8,23 @@ impl WrappedText {
     /// Creates a new [`WrappedText`] that will be wrapped to the specified `width` and according
     /// to the glyphs in the provided [`Font`].
     pub fn new(text: String, width: u32, font: &Font) -> Self {
+        Self::new_without_width(text, Some(width), font)
+    }
+
+    // TODO: Consider whether it is worth it to expose this function as `pub`. Will a user ever
+    // actually need this, especially with a good builder API for the Element tree?
+    // The function does not really do harm but also, it is quite an implementation detail. It will
+    // make it more expensive to mess with it at a later time.
+    /// Set up a new [`WrappedText`] without wrapping any lines.
+    ///
+    /// In order to wrap the text to the desired width at a later stage, call
+    /// [`WrappedText::rewrap`].
+    pub(crate) fn new_without_width(text: String, width: Option<u32>, font: &Font) -> Self {
         let mut ret = Self(text, Vec::new());
-        ret.rewrap(Some(width), font);
+        ret.rewrap(width, font);
         ret
     }
+
 
     pub fn rewrap(&mut self, maxwidth: Option<u32>, font: &Font) {
         // TODO: Do this optimization that I had this note for:
