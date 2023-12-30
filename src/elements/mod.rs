@@ -10,29 +10,36 @@ use crate::{Block, Pixel};
 pub mod graph;
 pub mod wrapped_text;
 
-type UpdateFn<D> = fn(&mut Element<D>, &D);
+type UpdateFn<D> = fn(element: &mut Element<D>, data: &D);
 
 #[derive(Debug, Default, Clone, Copy)]
 pub enum SizingStrategy {
     #[default]
-    /// Just do whatever. The "normal" behavior.
+    /// The [`Element`] is sized according to the normal rules for the `min` and `max` dimensions
+    /// as set by the [`Size`].
     Whatever,
-    /// Hey, please use as little room as possible please.
+    /// > "Pretty please fill out the room as much as you can!"
+    ///
+    /// If there's the opportunity to grow right up to the [`Size`]'s `max` dimensions, do it.
+    /// When these dimensions are unset, the same rules apply as for [`SizingStrategy::Whatever`].
     Chonker,
-    /// Pretty please fill out the room as much as you can!
+    /// > "Hey, please use as little room as possible please."
+    ///
+    /// If there's the opportunity to shrink right down to the [`Size`]'s `min` dimensions, do it.
+    /// When these dimensions are unset, the same rules apply as for [`SizingStrategy::Whatever`].
     Smollest,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
-/// # Note
+/// Specifies the size of an Element.
 ///
-/// The [`width`] and [`height`] fields are the unconstrained dimensions. These may fall outside of
-/// the bounds set by the `min` and `max` fields. Use [`Element::fill_size`] and
-/// [`Element::overall_size`] to get the actual sizes constrained by the `min` and `max`
-/// properties.
+/// Use [`Element::fill_size`] and [`Element::overall_size`] to get the actual sizes constrained by
+/// the `min` and `max` dimensions.
 pub struct Size {
     pub strategy: SizingStrategy,
+    /// The unconstrained width dimension. It may fall outside of `maxwidth` and `minwidth`.
     baked_width: u32,
+    /// The unconstrained height dimension. It may fall outside of `maxheight` and `minheight`.
     baked_height: u32,
     pub maxwidth: Option<u32>,
     pub maxheight: Option<u32>,
@@ -71,10 +78,12 @@ pub struct Flex {
 }
 
 impl Flex {
+    /// Returns the number of vertical flexes of this [`Flex`].
     fn vertical_flexes(&self) -> usize {
         self.top as usize + self.bottom as usize
     }
 
+    /// Returns the number of horizontal flexes of this [`Flex`].
     fn horizontal_flexes(&self) -> usize {
         self.left as usize + self.right as usize
     }
@@ -88,6 +97,7 @@ pub struct Style {
 }
 
 impl Style {
+    /// Creates a new [`Style`].
     pub fn new(foreground: Pixel, background: Pixel, font: Rc<Font>) -> Self {
         Self {
             foreground,
@@ -96,7 +106,8 @@ impl Style {
         }
     }
 
-    /// Black foreground, white background.
+    /// Creates a new [`Style`] with a black `foreground`, white `background`, and the specified
+    /// `font`.
     pub fn default_with_font(font: Rc<Font>) -> Self {
         Self {
             foreground: [0x00, 0x00, 0x00, 0xff],
@@ -123,6 +134,7 @@ pub enum Content<D> {
 }
 
 impl<D> Element<D> {
+    /// Creates a new [`Element<D>`].
     pub fn new(update: Option<UpdateFn<D>>, content: Content<D>, font: Rc<Font>) -> Self {
         Self {
             size: Default::default(),
@@ -134,10 +146,20 @@ impl<D> Element<D> {
         }
     }
 
+    /// Creates a new [`Element<D>`] without an `update` function.
+    ///
+    /// This [`Element`] will itself remain unchanged. Its children can of course have `update`
+    /// functions of their own, but these cannot affect this `Element`s internals beyond
+    /// themselves.
     pub fn still(font: Rc<Font>, content: Content<D>) -> Self {
         Self::new(None, content, font)
     }
 
+    /// Creates a new [`Element<D>`] with an `update` function.
+    ///
+    /// The `update` function allows this [`Element`] to mutate its properties such as `size`,
+    /// `padding`, and `content` based on `data` (`&D`) when
+    /// [`Panel::update`](crate::Panel::update) is called.
     pub fn dynamic(update: UpdateFn<D>, font: Rc<Font>, content: Content<D>) -> Self {
         Self::new(Some(update), content, font)
     }
@@ -353,10 +375,14 @@ impl<D> Element<D> {
 }
 
 impl<D> Element<D> {
+    /// Returns the size of this [`Element<D>`].
     pub fn size(&self) -> Size {
         self.size
     }
 
+    /// Returns the fill size of this [`Element<D>`].
+    ///
+    /// These [`Dimensions`] _exclude_ the padding and only report the inner size of the `Element`.
     pub fn fill_size(&self) -> Dimensions {
         let size = self.size();
         let width = match (size.minwidth, size.maxwidth) {
@@ -375,6 +401,9 @@ impl<D> Element<D> {
     }
 
     /* without padding */
+    /// Returns the smallest possible fill size of this [`Element<D>`].
+    ///
+    /// These [`Dimensions`] _exclude_ the padding and only report the inner size of the `Element`.
     pub fn min_fill_size(&self) -> Dimensions {
         let size = self.size();
         let width = match (size.minwidth, size.maxwidth) {
@@ -390,6 +419,9 @@ impl<D> Element<D> {
         Dimensions { width, height }
     }
 
+    /// Returns the largest possible fill size of this [`Element<D>`].
+    ///
+    /// These [`Dimensions`] _exclude_ the padding and only report the inner size of the `Element`.
     pub fn max_fill_size(&self) -> Dimensions {
         let size = self.size();
         let width = match (size.minwidth, size.maxwidth) {
@@ -412,6 +444,9 @@ impl<D> Element<D> {
         fillsize
     }
 
+    /// Returns the overall size of this [`Element<D>`].
+    ///
+    /// These [`Dimensions`] _include_ the padding.
     pub fn overall_size(&self) -> Dimensions {
         Self::include_padding(self.fill_size(), self.padding)
     }
@@ -563,7 +598,7 @@ fn draw_text(
     // commit e945006.
 
     let scrap_width = font.determine_width(text);
-    // TODO: Perhaps this case can be handled a little more gracefull, but that will
+    // TODO: Perhaps this case can be handled a little more gracefully, but that will
     // require a more holistic view of the whole layout "engine" in a later stage.
     // Postponing ;)
     if block.width == 0 || scrap_width == 0 {
@@ -586,8 +621,6 @@ fn draw_text(
         x0 += glyph_width;
     }
 
-    // TODO: Not loving how this match turned out. Seems kind of messy and with repetition
-    // that is confusing, since it obscures a more elegant insight.
     match alignment {
         Alignment::Left => {
             let end = block.width.min(scrap.width) as usize;

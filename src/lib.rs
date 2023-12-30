@@ -16,6 +16,7 @@ type Rows<'b> = std::slice::ChunksExact<'b, Pixel>;
 /// An iterator over mutable rows of [`Pixel`]s.
 type RowsMut<'b> = std::slice::ChunksExactMut<'b, Pixel>;
 
+/// Representation of the window and associated data of type `D`.
 pub struct Panel<D> {
     pub width: u32,
     pub height: u32,
@@ -27,6 +28,7 @@ pub struct Panel<D> {
 }
 
 impl<D> Panel<D> {
+    /// Creates a new [`Panel<D>`].
     pub fn new(mut elements: Element<D>, foreground: Pixel, background: Pixel, data: D) -> Self {
         elements.bake_size(None); // We calculate the sizes in order to give the first estimate.
         let Dimensions { width, height } = elements.overall_size();
@@ -40,18 +42,18 @@ impl<D> Panel<D> {
         }
     }
 
-    /// Returns a mutable reference to the data of this [`Raam<D>`].
+    /// Returns a mutable reference to the data of this [`Panel<D>`].
     pub fn data_mut(&mut self) -> &mut D {
         &mut self.data
     }
 
-    /// Update all elements with the internal `data`.
+    /// Update all elements in this [`Panel<D>`] with the internal `data`.
     pub fn update(&mut self) {
         self.elements.update(&self.data);
         self.elements.bake_size(Some(self.width));
     }
 
-    /// Draw the [`Raam`] onto a pixel buffer.
+    /// Draw the [`Panel<D>`] onto a pixel buffer.
     ///
     /// The pixel buffer is provided as a mutable slice of bytes. It is assumed that this buffer
     /// uses the same pixel representation as [`Block`], which is 32-bit RGBA pixels.
@@ -67,6 +69,7 @@ impl<D> Panel<D> {
         block.draw_onto_pixels(pixels);
     }
 
+    /// Resize the [`Panel<D>`].
     pub fn resize(&mut self, width: u32, height: u32) {
         self.width = width;
         self.height = height;
