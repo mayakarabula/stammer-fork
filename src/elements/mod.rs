@@ -133,6 +133,192 @@ pub enum Content<D> {
     Stack(Vec<Element<D>>),
 }
 
+pub mod builder {
+    use super::*;
+
+    pub trait ElementBuilder<D> {
+        fn with_update(self, update: UpdateFn<D>) -> Self;
+        fn build(self) -> Element<D>;
+    }
+
+    enum ContainerKind {
+        Stack,
+        Row,
+    }
+
+    pub struct ContainerBuilder<D> {
+        font: Rc<Font>,
+        update: Option<UpdateFn<D>>,
+        kind: ContainerKind,
+        children: Vec<Element<D>>,
+    }
+
+    impl<D> ElementBuilder<D> for ContainerBuilder<D> {
+        fn with_update(mut self, update: UpdateFn<D>) -> Self {
+            self.update = Some(update);
+            self
+        }
+
+        fn build(self) -> Element<D> {
+            let content = match self.kind {
+                ContainerKind::Stack => Content::Stack(self.children),
+                ContainerKind::Row => Content::Row(self.children),
+            };
+            Element::new(self.update, content, self.font)
+        }
+    }
+
+    impl<D> ContainerBuilder<D> {
+        fn row(font: &Rc<Font>) -> Self {
+            Self {
+                font: Rc::clone(font),
+                update: None,
+                kind: ContainerKind::Row,
+                children: Vec::new(),
+            }
+        }
+
+        fn stack(font: &Rc<Font>) -> Self {
+            Self {
+                font: Rc::clone(font),
+                update: None,
+                kind: ContainerKind::Stack,
+                children: Vec::new(),
+            }
+        }
+
+        pub fn add_child(mut self, child: Element<D>) -> Self {
+            self.children.push(child);
+            self
+        }
+
+        pub fn add_children(mut self, children: impl Iterator<Item = Element<D>>) -> Self {
+            self.children.extend(children);
+            self
+        }
+    }
+
+    pub struct TextBuilder<D> {
+        font: Rc<Font>,
+        update: Option<UpdateFn<D>>,
+        alignment: Alignment,
+        string: String,
+    }
+
+    impl<D> ElementBuilder<D> for TextBuilder<D> {
+        fn with_update(mut self, update: UpdateFn<D>) -> Self {
+            self.update = Some(update);
+            self
+        }
+
+        fn build(self) -> Element<D> {
+            let content = Content::Text(self.string, self.alignment);
+            Element::new(self.update, content, self.font)
+        }
+    }
+
+    impl<D> TextBuilder<D> {
+        fn text(font: &Rc<Font>) -> Self {
+            Self {
+                font: Rc::clone(font),
+                update: None,
+                alignment: Default::default(),
+                string: Default::default(),
+            }
+        }
+
+        // TODO: I don't feel like thinking about what the proper thing to do here would be. So
+        // this is fine for now. Pretty ergonomic in the sense that we don't have to call
+        // .to_string() every time. See also the caunterpart for ParagraphBuilder.
+        pub fn with_string(mut self, s: &str) -> Self {
+            self.string.clear();
+            self.string.push_str(s);
+                self
+        }
+
+        pub fn with_alignment(mut self, alignment: Alignment) -> Self {
+            self.alignment = alignment;
+            self
+        }
+    }
+
+    pub struct ParagraphBuilder<D> {
+        font: Rc<Font>,
+        update: Option<UpdateFn<D>>,
+        alignment: Alignment,
+        width: Option<u32>,
+        string: String,
+    }
+
+    impl<D> ElementBuilder<D> for ParagraphBuilder<D> {
+        fn with_update(mut self, update: UpdateFn<D>) -> Self {
+            self.update = Some(update);
+            self
+        }
+
+        fn build(self) -> Element<D> {
+            let wrapped = WrappedText::new_without_width(self.string, self.width, &self.font);
+            let content = Content::Paragraph(wrapped, self.alignment);
+            Element::new(self.update, content, self.font)
+        }
+
+    }
+
+    impl<D> ParagraphBuilder<D> {
+        fn paragraph(font: &Rc<Font>) -> Self {
+            Self {
+                font: Rc::clone(font),
+                update: None,
+                alignment: Default::default(),
+                width: None,
+                string: Default::default(),
+            }
+        }
+
+        pub fn with_string(mut self, s: &str) -> Self {
+            self.string.clear();
+            self.string.push_str(s);
+                self
+        }
+
+        pub fn with_width(mut self, width: u32) -> Self {
+            self.width = Some(width);
+            self
+        }
+
+        pub fn with_alignment(mut self, alignment: Alignment) -> Self {
+            self.alignment = alignment;
+            self
+        }
+    }
+
+    impl<D> Element<D> {
+        pub fn row_builder(font: &Rc<Font>) -> ContainerBuilder<D> {
+            ContainerBuilder::row(font)
+        }
+
+        pub fn stack_builder(font: &Rc<Font>) -> ContainerBuilder<D> {
+            ContainerBuilder::stack(font)
+        }
+
+        pub fn text(s: &str, font: &Rc<Font>) -> TextBuilder<D> {
+            TextBuilder::text(font).with_string(s)
+        }
+
+        pub fn paragraph(s: &str, font: &Rc<Font>) -> ParagraphBuilder<D> {
+            ParagraphBuilder::paragraph(font).with_string(s)
+        }
+
+        pub fn empty_text(font: &Rc<Font>) -> TextBuilder<D> {
+            TextBuilder::text(font)
+        }
+
+        pub fn empty_paragraph(font: &Rc<Font>) -> ParagraphBuilder<D> {
+            ParagraphBuilder::paragraph(font)
+        }
+    }
+}
+
 impl<D> Element<D> {
     /// Creates a new [`Element<D>`].
     pub fn new(update: Option<UpdateFn<D>>, content: Content<D>, font: Rc<Font>) -> Self {

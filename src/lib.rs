@@ -20,6 +20,9 @@ type RowsMut<'b> = std::slice::ChunksExactMut<'b, Pixel>;
 pub struct Panel<D> {
     pub width: u32,
     pub height: u32,
+    // TODO: We can probably do without foreground and background since we can just take the values
+    // from the root Element. That Element always has a Style. Consider. In fact, I don't think
+    // that we actually use this `foreground` meaningfully anywhere.
     pub foreground: Pixel,
     pub background: Pixel,
 
