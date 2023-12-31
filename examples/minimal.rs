@@ -213,7 +213,7 @@ fn main() -> Result<(), pixels::Error> {
             // Resize the window.
             if let Some(size) = input.window_resized() {
                 eprintln!("INFO:  Resize request {size:?}");
-                let ps = LogicalSize {
+                let ps = PhysicalSize {
                     width: (size.width / scale_factor) * scale_factor,
                     height: (size.height / scale_factor) * scale_factor,
                 };
