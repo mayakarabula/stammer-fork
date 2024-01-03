@@ -129,6 +129,7 @@ pub struct Element<D> {
 pub enum Content<D> {
     Text(String, Alignment),
     Paragraph(WrappedText, Alignment),
+    Custom { buf: Vec<Pixel>, height: u32 },
     Row(Vec<Element<D>>),
     Stack(Vec<Element<D>>),
 }
@@ -500,6 +501,10 @@ impl<D> Element<D> {
                     .unwrap_or_default();
                 height = (self.style.font.height() * wrapped.lines_count()) as u32;
             }
+            Content::Custom { buf, height: h } => {
+                width = buf.len() as u32 / *h;
+                height = *h;
+            }
             Content::Row(children) | Content::Stack(children) => {
                 // TODO: See whether this collect alloc can be eliminated. Perhaps unzip?
                 let sizes: Vec<_> = children
@@ -570,6 +575,13 @@ impl<D> Element<D> {
     ///
     /// These [`Dimensions`] _exclude_ the padding and only report the inner size of the `Element`.
     pub fn fill_size(&self) -> Dimensions {
+        if let Content::Custom { buf, height } = &self.content {
+            let width = buf.len() as u32 / height;
+            return Dimensions {
+                width,
+                height: *height,
+            };
+        }
         let size = self.size();
         let width = match (size.minwidth, size.maxwidth) {
             (None, None) => size.baked_width,
@@ -715,6 +727,11 @@ impl<D> DrawBlock for Element<D> {
                         break;
                     }
                 }
+            }
+            Content::Custom { buf, height: h } => {
+                assert_eq!(buf.len() as u32 / h, width); // FIXME: Is this redundant?
+                assert_eq!(*h, height);
+                inner_block.buf.copy_from_slice(buf);
             }
             Content::Row(children) => {
                 let (room_per_flex_hor, room_per_flex_ver) = self.room_per_flex(children);
