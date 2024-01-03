@@ -40,38 +40,24 @@ fn load_font(path: &str) -> std::io::Result<Font> {
 }
 
 fn setup_elements(font: Rc<Font>) -> Element<Data> {
-    let graph_width = 150;
-    let sine = Graph::from({
-        // A lil sine wave.
-        let mut deque = VecDeque::new();
-        for x in 0..graph_width {
-            let y = f32::sin(x as f32 / (graph_width / 4) as f32 * std::f32::consts::FRAC_PI_2);
-            deque.push_front(y)
+    fn render_graph(lens: fn(&Data) -> &Graph) -> impl Fn(&mut Element<Data>, &Data) {
+        move |element: &mut Element<Data>, data: &Data| {
+            // TODO: This whole practice is a mess and is horrible and oh no.
+            let Content::Custom { buf, height } = &mut element.content else {
+                unreachable!()
+            };
+            let graph = lens(data);
+            graph.paint(buf, *height, &element.style);
         }
-        deque
-    });
-    let triangle = Graph::from({
-        // A triangle wave.
-        let mut deque = VecDeque::new();
-        for x in 0..graph_width {
-            let a = graph_width / 5;
-            let y = i32::abs(x % 30 - a / 2);
-            deque.push_front(y as f32)
-        }
-        deque
-    });
+    }
 
-    // FIXME: Reintroduce Content::Graph or something like that. This will need some thought so
-    // please communicate before embarking on this. Could be in large part just taking the old
-    // implementation, which was perfectly fine. But the thinking will be in how it fits with the
-    // rest of the Elements.
-    // fn step_graph(element: &mut Element<Data>, data: &Data) {
-    //     // TODO: This whole practice is a mess and is horrible and oh no.
-    //     let Content::Graph(graph) = &mut element.content else {
-    //         unreachable!()
-    //     };
-    //     graph.inner_mut().rotate_left(data.rotate_step);
-    // }
+    fn render_graph_a(element: &mut Element<Data>, data: &Data) {
+        render_graph(|data| &data.graph_a)(element, data)
+    }
+
+    fn render_graph_b(element: &mut Element<Data>, data: &Data) {
+        render_graph(|data| &data.graph_b)(element, data)
+    }
 
     fn display_step(element: &mut Element<Data>, data: &Data) {
         // TODO: This whole practice is a mess and is horrible and oh no.
@@ -81,6 +67,14 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
         text.clear();
         text.push_str(format!("{} femtoseconds", data.rotate_step).as_str())
     }
+
+    let graph_height = 16;
+    let graph_width = 150;
+    let graph_buffer = vec![[0xff, 0xaa, 0xaa, 0xff]; graph_height as usize * graph_width as usize];
+    let create_graph = || Content::Custom {
+        buf: graph_buffer.clone(),
+        height: graph_height,
+    };
 
     {
         use Content::*;
@@ -127,17 +121,9 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
                         Element::still(
                             Rc::clone(&font),
                             Stack(vec![
-                                Element::still(
-                                    Rc::clone(&font),
-                                    Text("TODO: Graph placeholder.".to_string(), Alignment::Right),
-                                )
-                                .with_padding_bottom(16),
-                                Element::still(
-                                    Rc::clone(&font),
-                                    Text("TODO: Graph placeholder.".to_string(), Alignment::Right),
-                                ),
-                                // Element::dynamic(step_graph, Rc::clone(&font), Graph(sine)),
-                                // Element::dynamic(step_graph, Rc::clone(&font), Graph(triangle)),
+                                Element::dynamic(render_graph_a, Rc::clone(&font), create_graph())
+                                    .with_padding_bottom(16),
+                                Element::dynamic(render_graph_b, Rc::clone(&font), create_graph()),
                             ]),
                         ),
                     ]),
@@ -151,7 +137,16 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
 }
 
 struct Data {
+    graph_a: Graph,
+    graph_b: Graph,
     rotate_step: usize,
+}
+
+impl Data {
+    fn update(&mut self) {
+        self.graph_a.inner_mut().rotate_left(self.rotate_step);
+        self.graph_b.inner_mut().rotate_left(self.rotate_step);
+    }
 }
 
 fn main() -> Result<(), pixels::Error> {
@@ -177,7 +172,31 @@ fn main() -> Result<(), pixels::Error> {
 
     let elements = setup_elements(Rc::new(font));
 
-    let data = Data { rotate_step: 1 };
+    let graph_width = 150;
+    let sine = Graph::from({
+        // A lil sine wave.
+        let mut deque = VecDeque::new();
+        for x in 0..graph_width {
+            let y = f32::sin(x as f32 / (graph_width / 4) as f32 * std::f32::consts::FRAC_PI_2);
+            deque.push_front(y)
+        }
+        deque
+    });
+    let triangle = Graph::from({
+        // A triangle wave.
+        let mut deque = VecDeque::new();
+        for x in 0..graph_width {
+            let a = graph_width / 5;
+            let y = i32::abs(x % 30 - a / 2);
+            deque.push_front(y as f32)
+        }
+        deque
+    });
+    let data = Data {
+        graph_a: sine,
+        graph_b: triangle,
+        rotate_step: 1,
+    };
     let mut state = Panel::new(
         elements,
         [0x00, 0x00, 0x00, 0xff],
@@ -218,6 +237,7 @@ fn main() -> Result<(), pixels::Error> {
                     .for_each(|px| *px = state.background);
 
                 // Update the state, then draw.
+                state.data_mut().update();
                 state.update();
                 state.draw(&mut pixels.frame_mut());
 
