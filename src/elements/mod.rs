@@ -124,6 +124,7 @@ pub struct Element<D> {
     pub style: Style,
     update: Option<UpdateFn<D>>,
     pub content: Content<D>,
+    pub scroll: Option<u32>,
 }
 
 pub enum Content<D> {
@@ -330,6 +331,7 @@ impl<D> Element<D> {
             style: Style::default_with_font(font),
             update,
             content,
+            scroll: Default::default(),
         }
     }
 
@@ -447,6 +449,11 @@ impl<D> Element<D> {
 
     pub fn with_background(mut self, background: Pixel) -> Self {
         self.style.background = background;
+        self
+    }
+
+    pub fn with_scroll(mut self, scroll: u32) -> Self {
+        self.scroll = Some(scroll);
         self
     }
 }
@@ -749,12 +756,17 @@ impl<D> DrawBlock for Element<D> {
             }
             Content::Stack(children) => {
                 let (room_per_flex_hor, room_per_flex_ver) = self.room_per_flex(children);
+
+                let children_height: u32 = children.iter().map(|child| child.overall_size().height).sum::<u32>();
+                let mut block = Block::new(self.overall_size().width, children_height, self.style.background);
+
                 let mut y = 0;
                 for child in children {
                     if child.flex.top {
                         y += room_per_flex_ver
                     }
-                    inner_block.paint(
+
+                    block.paint(
                         &child.block(),
                         child.flex.left as u32 * room_per_flex_hor,
                         y,
@@ -764,6 +776,11 @@ impl<D> DrawBlock for Element<D> {
                     }
                     y += child.overall_size().height;
                 }
+                
+                let scroll_index: usize = self.scroll.unwrap_or(0) as usize;
+                let start_index: usize = scroll_index * block.width as usize;
+
+                inner_block.buf = block.buf[start_index..].to_vec();
             }
         }
 

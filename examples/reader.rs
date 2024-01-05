@@ -5,8 +5,8 @@ use std::rc::Rc;
 use fleck::Font;
 use pixels::wgpu::BlendState;
 use pixels::{PixelsBuilder, SurfaceTexture};
-use stammer::elements::{Alignment, WrappedText};
-use stammer::elements::{Content, Element};
+use stammer::elements::builder::ElementBuilder;
+use stammer::elements::{Alignment, Element, WrappedText, Content};
 use stammer::Panel;
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::{Event, VirtualKeyCode};
@@ -51,21 +51,23 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
         text.push_str(data.address.as_str())
     }
 
-    // FIXME: Implement ability to scroll containers for this to work.
-    // fn update_scroll(element: &mut Element<Data>, data: &Data) {
-    //     // TODO: This whole practice is a mess and is horrible and oh no.
-    //     let Content::Scroll(_, _, pos) = element else {
-    //         unreachable!()
-    //     };
-    //     *pos = data.scroll_pos;
-    // }
-
     fn display_text(element: &mut Element<Data>, data: &Data) {
         // TODO: This whole practice is a mess and is horrible and oh no.
         let Content::Paragraph(text, _) = &mut element.content else {
             unreachable!()
         };
+
+        element.size.maxwidth = Some(data.width);
+        element.size.minwidth = Some(data.width);
+
+        element.size.maxheight = data.height.checked_sub(element.style.font.height() as u32); 
+        element.size.minheight = data.height.checked_sub(element.style.font.height() as u32);
+
         *text = WrappedText::new(data.text.clone(), data.width, &element.style.font)
+    }
+
+    fn update_scroll(element: &mut Element<Data>, data: &Data) {
+        element.scroll = Some(data.scroll_pos as u32);
     }
 
     fn display_mode(element: &mut Element<Data>, data: &Data) {
@@ -77,35 +79,41 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
         text.push_str(data.mode.to_string().as_str())
     }
 
-    {
-        use Content::*;
-        Element::still(
-            Rc::clone(&font),
-            Stack(vec![
-                Element::dynamic(
-                    display_address,
-                    Rc::clone(&font),
-                    Text("---".to_string(), Alignment::Left),
-                ),
-                // FIXME: Implement ability to scroll containers for this to work.
-                // Element::dynamic(
-                //     update_scroll,Rc::clone(&font),
-                //     Scroll(
-                //         Box::new(
-                //             Element::dynamic(display_text,Rc::clone(&font),  Paragraph(WrappedText::default()))
-                //         ),
-                //         300,
-                //         0,
-                //     ),
-                // ),
-                Element::dynamic(
-                    display_mode,
-                    Rc::clone(&font),
-                    Text("---".to_string(), Alignment::Left),
-                ),
-            ]),
-        )
+    fn resize_height(element: &mut Element<Data>, data: &Data) {
+        element.size.maxheight = Some(data.height);
+        element.size.minheight = Some(data.height);
     }
+
+    Element::stack_builder(&font)
+        .with_update(resize_height)
+        .add_child(
+            Element::text("---", &font)
+                .with_update(display_address)
+                .with_alignment(Alignment::Left)
+                .build()
+            )
+        .add_child(
+            Element::stack_builder(&font)
+            .with_update(update_scroll)
+            .add_child(
+                Element::empty_paragraph(&font)
+                    .with_update(display_text)
+                    .with_alignment(Alignment::Left)
+                    .build()
+                    .with_minwidth(600)
+                    .with_maxheight(400)
+                    .with_minheight(400)
+            )
+            .build()
+            .with_scroll(0)
+        )
+        .add_child(
+            Element::text("---", &font)
+            .with_update(display_mode)
+            .with_alignment(Alignment::Left)
+            .build()
+        )
+        .build()
 }
 
 struct Data {
@@ -114,6 +122,7 @@ struct Data {
     address: String,
     mode: Mode,
     width: u32,
+    height: u32,
 }
 
 #[derive(PartialEq, Eq)]
@@ -134,13 +143,6 @@ impl ToString for Mode {
 }
 
 fn main() -> Result<(), pixels::Error> {
-    todo!(
-        "This example is currently utterly broken.
-This repo is in a state of transition.
-    (there's a joke here somewhere about rust programmers)
-Please feel free to hack at the functionality that is currently broken!"
-    );
-
     let mut args = std::env::args().skip(1);
     let font_path = args
         .next()
@@ -164,11 +166,12 @@ Please feel free to hack at the functionality that is currently broken!"
 
     let elements = setup_elements(font);
     let data = Data {
-        text: [LOREM; 3].concat().to_string(),
+        text: [LOREM; 8].concat().to_string(),
         scroll_pos: 0,
         address: "gemini://example.com/".to_string(),
         mode: Mode::Normal,
         width: 0,
+        height: 0,
     };
     let mut state = Panel::new(
         elements,
@@ -179,6 +182,9 @@ Please feel free to hack at the functionality that is currently broken!"
 
     let (width, height) = (state.width, state.height);
     let size = PhysicalSize::new(width * scale_factor, height * scale_factor);
+
+    state.data_mut().width = width;
+    state.data_mut().height = height;
 
     let mut input = WinitInputHelper::new();
     let window = setup_window(size, &event_loop);
@@ -304,7 +310,7 @@ Please feel free to hack at the functionality that is currently broken!"
                 window.set_inner_size(ps);
                 state.resize(ls.width, ls.height);
                 state.data_mut().width = ls.width;
-
+                state.data_mut().height = ls.height;
                 window.request_redraw();
             }
         }
