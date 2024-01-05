@@ -730,9 +730,12 @@ impl<D> DrawBlock for Element<D> {
                     );
                     inner_block.paint(&line_block, 0, y);
                     y += line_block.height;
-                    if y > height {
-                        break;
-                    }
+
+                    if let Some(maxheight) = self.size.maxheight {
+                        if y > maxheight {
+                            break;
+                        }
+                    }              
                 }
             }
             Content::Custom { buf, height: h } => {
@@ -778,8 +781,9 @@ impl<D> DrawBlock for Element<D> {
                 }
                 
                 let scroll_index: usize = self.scroll.unwrap_or(0) as usize;
-                let start_index: usize = scroll_index * block.width as usize;
+                let start_index: usize = scroll_index * inner_block.width as usize;
 
+                // FIXME: with a max height of zero start_index will always be invalid
                 inner_block.buf = block.buf[start_index..].to_vec();
             }
         }

@@ -6,7 +6,7 @@ use fleck::Font;
 use pixels::wgpu::BlendState;
 use pixels::{PixelsBuilder, SurfaceTexture};
 use stammer::elements::builder::ElementBuilder;
-use stammer::elements::{Alignment, Element, WrappedText, Content};
+use stammer::elements::{Alignment, Element, WrappedText, Content, SizingStrategy};
 use stammer::Panel;
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::{Event, VirtualKeyCode};
@@ -60,14 +60,13 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
         element.size.maxwidth = Some(data.width);
         element.size.minwidth = Some(data.width);
 
-        element.size.maxheight = data.height.checked_sub(element.style.font.height() as u32); 
-        element.size.minheight = data.height.checked_sub(element.style.font.height() as u32);
-
         *text = WrappedText::new(data.text.clone(), data.width, &element.style.font)
     }
 
     fn update_scroll(element: &mut Element<Data>, data: &Data) {
         element.scroll = Some(data.scroll_pos as u32);
+        element.size.maxheight = data.height.checked_sub(2 * element.style.font.height() as u32); 
+        element.size.minheight = data.height.checked_sub(2 * element.style.font.height() as u32);
     }
 
     fn display_mode(element: &mut Element<Data>, data: &Data) {
@@ -100,12 +99,16 @@ fn setup_elements(font: Rc<Font>) -> Element<Data> {
                     .with_update(display_text)
                     .with_alignment(Alignment::Left)
                     .build()
-                    .with_minwidth(600)
-                    .with_maxheight(400)
-                    .with_minheight(400)
+                    .with_strategy(SizingStrategy::Chonker)
+                    .with_maxheight(700)
+                    .with_background([0xff, 0x00, 0x00, 0xff])
             )
             .build()
             .with_scroll(0)
+            .with_minwidth(600)
+            .with_maxheight(400)
+            .with_minheight(400)
+            .with_background([0x00, 0xff, 0x00, 0xff])
         )
         .add_child(
             Element::text("---", &font)
